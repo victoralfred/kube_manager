@@ -2,12 +2,10 @@ package secrets
 
 import (
 	"context"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 	"strconv"
 
+	"github.com/victoralfred/kube_manager/pkg/crypto"
 	"github.com/victoralfred/kube_manager/pkg/logger"
 	"github.com/victoralfred/kube_manager/pkg/vault"
 )
@@ -90,12 +88,12 @@ func (v *VaultManager) GetJWTKeys(ctx context.Context) (*JWTKeys, error) {
 		return nil, fmt.Errorf("jwt keys not found in vault")
 	}
 
-	privateKey, err := parseRSAPrivateKey(privateKeyPEM)
+	privateKey, err := crypto.DecodePrivateKeyFromPEM(privateKeyPEM)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse jwt private key: %w", err)
 	}
 
-	publicKey, err := parseRSAPublicKey(publicKeyPEM)
+	publicKey, err := crypto.DecodePublicKeyFromPEM(publicKeyPEM)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse jwt public key: %w", err)
 	}
@@ -123,12 +121,12 @@ func (v *VaultManager) GetCSRFKey(ctx context.Context) (*CSRFKey, error) {
 		return nil, fmt.Errorf("csrf keys not found in vault")
 	}
 
-	privateKey, err := parseRSAPrivateKey(privateKeyPEM)
+	privateKey, err := crypto.DecodePrivateKeyFromPEM(privateKeyPEM)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse csrf private key: %w", err)
 	}
 
-	publicKey, err := parseRSAPublicKey(publicKeyPEM)
+	publicKey, err := crypto.DecodePublicKeyFromPEM(publicKeyPEM)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse csrf public key: %w", err)
 	}
@@ -182,43 +180,4 @@ func getBool(data map[string]interface{}, key string, defaultValue bool) bool {
 		return val
 	}
 	return defaultValue
-}
-
-func parseRSAPrivateKey(pemStr string) (*rsa.PrivateKey, error) {
-	block, _ := pem.Decode([]byte(pemStr))
-	if block == nil {
-		return nil, fmt.Errorf("failed to decode PEM block")
-	}
-
-	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	if err != nil {
-		// Try PKCS1 format
-		return x509.ParsePKCS1PrivateKey(block.Bytes)
-	}
-
-	rsaKey, ok := key.(*rsa.PrivateKey)
-	if !ok {
-		return nil, fmt.Errorf("key is not RSA private key")
-	}
-
-	return rsaKey, nil
-}
-
-func parseRSAPublicKey(pemStr string) (*rsa.PublicKey, error) {
-	block, _ := pem.Decode([]byte(pemStr))
-	if block == nil {
-		return nil, fmt.Errorf("failed to decode PEM block")
-	}
-
-	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse public key: %w", err)
-	}
-
-	rsaPub, ok := pub.(*rsa.PublicKey)
-	if !ok {
-		return nil, fmt.Errorf("key is not RSA public key")
-	}
-
-	return rsaPub, nil
 }
