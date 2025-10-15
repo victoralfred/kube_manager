@@ -1,8 +1,10 @@
 package crypto
 
 import (
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -138,4 +140,86 @@ func NewKeyPair(bits int) (*KeyPair, error) {
 		PublicKeyPEM:  publicPEM,
 		KeyID:         GenerateKeyID(),
 	}, nil
+}
+
+// SignSHA256 signs data with RSA private key using SHA256 hash
+func SignSHA256(privateKey *rsa.PrivateKey, data []byte) ([]byte, error) {
+	if privateKey == nil {
+		return nil, fmt.Errorf("private key is nil")
+	}
+
+	// Hash the data with SHA256
+	hashed := sha256.Sum256(data)
+
+	// Sign the hash with the private key
+	signature, err := rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA256, hashed[:])
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign data: %w", err)
+	}
+
+	return signature, nil
+}
+
+// VerifyRSAPKCS1v15 verifies an RSA signature using SHA256 hash
+func VerifyRSAPKCS1v15(publicKey *rsa.PublicKey, data, signature []byte) error {
+	if publicKey == nil {
+		return fmt.Errorf("public key is nil")
+	}
+
+	// Hash the data with SHA256
+	hashed := sha256.Sum256(data)
+
+	// Verify the signature
+	err := rsa.VerifyPKCS1v15(publicKey, crypto.SHA256, hashed[:], signature)
+	if err != nil {
+		return fmt.Errorf("signature verification failed: %w", err)
+	}
+
+	return nil
+}
+
+// SignWithRSA signs arbitrary data with RSA private key using specified hash algorithm
+func SignWithRSA(privateKey *rsa.PrivateKey, data []byte, hashAlgo crypto.Hash) ([]byte, error) {
+	if privateKey == nil {
+		return nil, fmt.Errorf("private key is nil")
+	}
+
+	// Create hasher based on algorithm
+	hasher := hashAlgo.New()
+	_, err := hasher.Write(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash data: %w", err)
+	}
+	hashed := hasher.Sum(nil)
+
+	// Sign the hash
+	signature, err := rsa.SignPKCS1v15(rand.Reader, privateKey, hashAlgo, hashed)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign data: %w", err)
+	}
+
+	return signature, nil
+}
+
+// VerifyWithRSA verifies an RSA signature using specified hash algorithm
+func VerifyWithRSA(publicKey *rsa.PublicKey, data, signature []byte, hashAlgo crypto.Hash) error {
+	if publicKey == nil {
+		return fmt.Errorf("public key is nil")
+	}
+
+	// Create hasher based on algorithm
+	hasher := hashAlgo.New()
+	_, err := hasher.Write(data)
+	if err != nil {
+		return fmt.Errorf("failed to hash data: %w", err)
+	}
+	hashed := hasher.Sum(nil)
+
+	// Verify the signature
+	err = rsa.VerifyPKCS1v15(publicKey, hashAlgo, hashed, signature)
+	if err != nil {
+		return fmt.Errorf("signature verification failed: %w", err)
+	}
+
+	return nil
 }

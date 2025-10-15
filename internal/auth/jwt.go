@@ -1,15 +1,14 @@
 package auth
 
 import (
-	"crypto"
-	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/victoralfred/kube_manager/pkg/crypto"
 )
 
 // JWTService handles JWT token operations using RSA
@@ -132,15 +131,14 @@ func (j *JWTService) VerifyToken(tokenString string) (*Claims, error) {
 		return nil, fmt.Errorf("failed to parse claims: %w", err)
 	}
 
-	// Verify signature
+	// Verify signature using our crypto package
 	message := []byte(parts[0] + "." + parts[1])
 	signature, err := base64.RawURLEncoding.DecodeString(parts[2])
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode signature: %w", err)
 	}
 
-	hashed := sha256.Sum256(message)
-	err = rsa.VerifyPKCS1v15(j.publicKey, crypto.SHA256, hashed[:], signature)
+	err = crypto.VerifyRSAPKCS1v15(j.publicKey, message, signature)
 	if err != nil {
 		return nil, ErrTokenSignature
 	}
@@ -184,9 +182,8 @@ func (j *JWTService) generateToken(claims Claims) (string, error) {
 	// Create message to sign
 	message := []byte(headerEncoded + "." + claimsEncoded)
 
-	// Sign with RSA private key
-	hashed := sha256.Sum256(message)
-	signature, err := rsa.SignPKCS1v15(rand.Reader, j.privateKey, crypto.SHA256, hashed[:])
+	// Sign with RSA private key using our crypto package
+	signature, err := crypto.SignSHA256(j.privateKey, message)
 	if err != nil {
 		return "", fmt.Errorf("failed to sign token: %w", err)
 	}
