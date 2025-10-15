@@ -44,9 +44,19 @@ func extractTenantID(c *gin.Context) string {
 
 	// 2. Check subdomain
 	host := c.Request.Host
-	parts := strings.Split(host, ".")
-	if len(parts) > 2 {
-		return parts[0]
+	// Remove port if present
+	if colonIndex := strings.Index(host, ":"); colonIndex != -1 {
+		host = host[:colonIndex]
+	}
+
+	// Check if host is an IP address
+	if isIPAddress(host) {
+		// Skip subdomain extraction for IP addresses
+	} else {
+		parts := strings.Split(host, ".")
+		if len(parts) > 2 {
+			return parts[0]
+		}
 	}
 
 	// 3. Check path parameter
@@ -60,6 +70,26 @@ func extractTenantID(c *gin.Context) string {
 	}
 
 	return ""
+}
+
+// isIPAddress checks if a string is an IP address
+func isIPAddress(host string) bool {
+	parts := strings.Split(host, ".")
+	if len(parts) != 4 {
+		return false
+	}
+	for _, part := range parts {
+		// Check if each part is numeric
+		if len(part) == 0 {
+			return false
+		}
+		for _, char := range part {
+			if char < '0' || char > '9' {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // GetTenantID retrieves tenant ID from context
