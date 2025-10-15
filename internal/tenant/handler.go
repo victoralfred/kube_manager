@@ -2,7 +2,6 @@ package tenant
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/victoralfred/kube_manager/pkg/errors"
