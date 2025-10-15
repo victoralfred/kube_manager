@@ -13,8 +13,8 @@ import (
 type TenantContextKey string
 
 const (
-	TenantIDKey TenantContextKey = "tenant_id"
-	TenantIDHeader               = "X-Tenant-ID"
+	TenantIDKey    TenantContextKey = "tenant_id"
+	TenantIDHeader string           = "X-Tenant-ID"
 )
 
 // TenantIdentifier middleware extracts tenant ID from request
@@ -44,15 +44,14 @@ func extractTenantID(c *gin.Context) string {
 
 	// 2. Check subdomain
 	host := c.Request.Host
+
 	// Remove port if present
 	if colonIndex := strings.Index(host, ":"); colonIndex != -1 {
 		host = host[:colonIndex]
 	}
 
-	// Check if host is an IP address
-	if isIPAddress(host) {
-		// Skip subdomain extraction for IP addresses
-	} else {
+	// Skip subdomain extraction for IP addresses
+	if !isIPAddress(host) {
 		parts := strings.Split(host, ".")
 		if len(parts) > 2 {
 			return parts[0]
@@ -72,14 +71,13 @@ func extractTenantID(c *gin.Context) string {
 	return ""
 }
 
-// isIPAddress checks if a string is an IP address
+// isIPAddress checks if the given host is an IPv4 address
 func isIPAddress(host string) bool {
 	parts := strings.Split(host, ".")
 	if len(parts) != 4 {
 		return false
 	}
 	for _, part := range parts {
-		// Check if each part is numeric
 		if len(part) == 0 {
 			return false
 		}
