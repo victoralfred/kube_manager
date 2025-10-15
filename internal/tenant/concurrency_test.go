@@ -79,14 +79,15 @@ func TestConcurrentTenantUpdates(t *testing.T) {
 
 	t.Run("concurrent updates should not cause data corruption", func(t *testing.T) {
 		tenantID := "tenant-123"
-		baseTenant := &Tenant{
-			ID:     tenantID,
-			Name:   "Original Name",
-			Status: TenantStatusActive,
-		}
 
-		// Setup mocks for concurrent updates
-		mockRepo.On("GetByID", ctx, tenantID).Return(baseTenant, nil).Times(5)
+		// Setup mocks for concurrent updates - each call returns a new instance
+		for i := 0; i < 5; i++ {
+			mockRepo.On("GetByID", ctx, tenantID).Return(&Tenant{
+				ID:     tenantID,
+				Name:   "Original Name",
+				Status: TenantStatusActive,
+			}, nil).Once()
+		}
 		mockRepo.On("Update", ctx, mock.MatchedBy(func(t *Tenant) bool {
 			return t.ID == tenantID
 		})).Return(nil).Times(5)
