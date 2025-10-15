@@ -1,0 +1,135 @@
+audit_logs:
+  get:
+    tags:
+      - audit
+    summary: List audit logs
+    description: Retrieve paginated audit logs with optional filters
+    operationId: listAuditLogs
+    parameters:
+      - name: X-Tenant-ID
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Tenant identifier
+      - name: action
+        in: query
+        schema:
+          type: string
+        description: Filter by action
+      - name: resource_type
+        in: query
+        schema:
+          type: string
+        description: Filter by resource type
+      - name: resource_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+        description: Filter by resource ID
+      - name: actor_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+        description: Filter by actor (user) ID
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [success, failure, pending]
+        description: Filter by status
+      - name: start_date
+        in: query
+        schema:
+          type: string
+          format: date-time
+        description: Filter logs from this date
+      - name: end_date
+        in: query
+        schema:
+          type: string
+          format: date-time
+        description: Filter logs until this date
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 10
+        description: Number of results per page
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+        description: Number of items to skip
+    responses:
+      '200':
+        description: List of audit logs
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '../schemas/common.yaml#/PaginatedResponse'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items:
+                        $ref: '../schemas/audit.yaml#/AuditLog'
+      '400':
+        description: Bad request
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'
+      '500':
+        description: Internal server error
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'
+  post:
+    tags:
+      - audit
+    summary: Create audit log
+    description: Create a new audit log entry (typically used internally)
+    operationId: createAuditLog
+    parameters:
+      - name: X-Tenant-ID
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Tenant identifier
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/audit.yaml#/CreateAuditLogRequest'
+    responses:
+      '201':
+        description: Audit log created successfully
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/audit.yaml#/AuditLog'
+      '400':
+        description: Bad request
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'
+      '500':
+        description: Internal server error
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'

@@ -1,0 +1,89 @@
+Error:
+  type: object
+  required:
+    - code
+    - message
+    - status
+  properties:
+    code:
+      type: string
+      description: Error code
+      example: "TENANT_NOT_FOUND"
+    message:
+      type: string
+      description: Human-readable error message
+      example: "Tenant not found"
+    status:
+      type: integer
+      description: HTTP status code
+      example: 404
+    details:
+      type: object
+      description: Additional error details
+      additionalProperties: true
+
+Pagination:
+  type: object
+  properties:
+    limit:
+      type: integer
+      description: Number of items per page
+      minimum: 1
+      maximum: 100
+      default: 10
+      example: 10
+    offset:
+      type: integer
+      description: Number of items to skip
+      minimum: 0
+      default: 0
+      example: 0
+    total:
+      type: integer
+      description: Total number of items
+      example: 100
+    sort_by:
+      type: string
+      description: Field to sort by
+      example: "created_at"
+    sort_desc:
+      type: boolean
+      description: Sort in descending order
+      default: false
+
+PaginatedResponse:
+  type: object
+  properties:
+    data:
+      type: array
+      items:
+        type: object
+    total:
+      type: integer
+      example: 100
+    limit:
+      type: integer
+      example: 10
+    offset:
+      type: integer
+      example: 0
+
+Timestamps:
+  type: object
+  properties:
+    created_at:
+      type: string
+      format: date-time
+      description: Creation timestamp
+      example: "2025-10-15T10:30:00Z"
+    updated_at:
+      type: string
+      format: date-time
+      description: Last update timestamp
+      example: "2025-10-15T11:45:00Z"
+    deleted_at:
+      type: string
+      format: date-time
+      nullable: true
+      description: Soft deletion timestamp
+      example: null

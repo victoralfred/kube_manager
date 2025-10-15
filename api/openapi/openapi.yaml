@@ -1,0 +1,151 @@
+openapi: 3.0.3
+info:
+  title: Kube Manager - Multi-Tenant Management System
+  description: |
+    Comprehensive multi-tenant management system with RBAC, user management,
+    resource allocation, and audit logging capabilities.
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@kubemanager.io
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development server
+  - url: https://api.kubemanager.io/v1
+    description: Production server
+
+tags:
+  - name: tenants
+    description: Tenant management operations
+  - name: users
+    description: User management operations
+  - name: auth
+    description: Authentication and authorization
+  - name: rbac
+    description: Role-based access control
+  - name: resources
+    description: Resource management
+  - name: audit
+    description: Audit logging
+
+security:
+  - bearerAuth: []
+
+paths:
+  # Tenant endpoints
+  /tenants:
+    $ref: './paths/tenants.yaml#/tenants'
+  /tenants/{id}:
+    $ref: './paths/tenants.yaml#/tenants_id'
+  /tenants/slug/{slug}:
+    $ref: './paths/tenants.yaml#/tenants_slug'
+  /tenants/{id}/suspend:
+    $ref: './paths/tenants.yaml#/tenants_suspend'
+  /tenants/{id}/activate:
+    $ref: './paths/tenants.yaml#/tenants_activate'
+  /tenants/{id}/stats:
+    $ref: './paths/tenants.yaml#/tenants_stats'
+
+  # User endpoints
+  /users:
+    $ref: './paths/users.yaml#/users'
+  /users/{id}:
+    $ref: './paths/users.yaml#/users_id'
+  /users/{id}/roles:
+    $ref: './paths/users.yaml#/users_roles'
+  /users/{id}/permissions:
+    $ref: './paths/users.yaml#/users_permissions'
+
+  # Auth endpoints
+  /auth/register:
+    $ref: './paths/auth.yaml#/auth_register'
+  /auth/login:
+    $ref: './paths/auth.yaml#/auth_login'
+  /auth/refresh:
+    $ref: './paths/auth.yaml#/auth_refresh'
+  /auth/logout:
+    $ref: './paths/auth.yaml#/auth_logout'
+  /auth/me:
+    $ref: './paths/auth.yaml#/auth_me'
+
+  # RBAC endpoints
+  /rbac/roles:
+    $ref: './paths/rbac.yaml#/roles'
+  /rbac/roles/{id}:
+    $ref: './paths/rbac.yaml#/roles_id'
+  /rbac/permissions:
+    $ref: './paths/rbac.yaml#/permissions'
+  /rbac/permissions/{id}:
+    $ref: './paths/rbac.yaml#/permissions_id'
+  /rbac/policies:
+    $ref: './paths/rbac.yaml#/policies'
+
+  # Resource endpoints
+  /resources:
+    $ref: './paths/resources.yaml#/resources'
+  /resources/{id}:
+    $ref: './paths/resources.yaml#/resources_id'
+
+  # Audit endpoints
+  /audit/logs:
+    $ref: './paths/audit.yaml#/audit_logs'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # Common schemas
+    Error:
+      $ref: './schemas/common.yaml#/Error'
+    Pagination:
+      $ref: './schemas/common.yaml#/Pagination'
+
+    # Tenant schemas
+    Tenant:
+      $ref: './schemas/tenant.yaml#/Tenant'
+    CreateTenantRequest:
+      $ref: './schemas/tenant.yaml#/CreateTenantRequest'
+    UpdateTenantRequest:
+      $ref: './schemas/tenant.yaml#/UpdateTenantRequest'
+    TenantStats:
+      $ref: './schemas/tenant.yaml#/TenantStats'
+
+    # User schemas
+    User:
+      $ref: './schemas/user.yaml#/User'
+    CreateUserRequest:
+      $ref: './schemas/user.yaml#/CreateUserRequest'
+    UpdateUserRequest:
+      $ref: './schemas/user.yaml#/UpdateUserRequest'
+
+    # Auth schemas
+    LoginRequest:
+      $ref: './schemas/auth.yaml#/LoginRequest'
+    LoginResponse:
+      $ref: './schemas/auth.yaml#/LoginResponse'
+    RegisterRequest:
+      $ref: './schemas/auth.yaml#/RegisterRequest'
+
+    # RBAC schemas
+    Role:
+      $ref: './schemas/rbac.yaml#/Role'
+    Permission:
+      $ref: './schemas/rbac.yaml#/Permission'
+    Policy:
+      $ref: './schemas/rbac.yaml#/Policy'
+
+    # Resource schemas
+    Resource:
+      $ref: './schemas/resource.yaml#/Resource'
+
+    # Audit schemas
+    AuditLog:
+      $ref: './schemas/audit.yaml#/AuditLog'

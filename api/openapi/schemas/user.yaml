@@ -1,0 +1,198 @@
+User:
+  type: object
+  required:
+    - id
+    - tenant_id
+    - email
+    - first_name
+    - last_name
+    - status
+    - created_at
+    - updated_at
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Unique user identifier
+      example: "660e8400-e29b-41d4-a716-446655440000"
+    tenant_id:
+      type: string
+      format: uuid
+      description: Tenant identifier
+      example: "550e8400-e29b-41d4-a716-446655440000"
+    email:
+      type: string
+      format: email
+      description: User email address
+      example: "user@example.com"
+    username:
+      type: string
+      minLength: 3
+      maxLength: 50
+      description: Username
+      example: "john_doe"
+    first_name:
+      type: string
+      description: First name
+      example: "John"
+    last_name:
+      type: string
+      description: Last name
+      example: "Doe"
+    phone:
+      type: string
+      nullable: true
+      description: Phone number
+      example: "+1234567890"
+    avatar_url:
+      type: string
+      format: uri
+      nullable: true
+      description: Avatar image URL
+      example: "https://example.com/avatars/john.jpg"
+    status:
+      $ref: '#/UserStatus'
+    metadata:
+      type: object
+      description: Additional user metadata
+      additionalProperties: true
+      example:
+        department: "Engineering"
+        employee_id: "EMP001"
+    last_login_at:
+      type: string
+      format: date-time
+      nullable: true
+      description: Last login timestamp
+      example: "2025-10-15T09:00:00Z"
+    created_at:
+      type: string
+      format: date-time
+      description: Creation timestamp
+      example: "2025-10-15T10:30:00Z"
+    updated_at:
+      type: string
+      format: date-time
+      description: Last update timestamp
+      example: "2025-10-15T11:45:00Z"
+    deleted_at:
+      type: string
+      format: date-time
+      nullable: true
+      description: Soft deletion timestamp
+      example: null
+
+UserStatus:
+  type: string
+  enum:
+    - active
+    - inactive
+    - suspended
+    - pending
+  description: Current status of the user
+  example: "active"
+
+CreateUserRequest:
+  type: object
+  required:
+    - email
+    - password
+    - first_name
+    - last_name
+  properties:
+    email:
+      type: string
+      format: email
+      description: User email address
+      example: "newuser@example.com"
+    username:
+      type: string
+      minLength: 3
+      maxLength: 50
+      description: Username
+      example: "new_user"
+    password:
+      type: string
+      format: password
+      minLength: 8
+      description: User password
+      example: "SecureP@ssw0rd"
+    first_name:
+      type: string
+      description: First name
+      example: "Jane"
+    last_name:
+      type: string
+      description: Last name
+      example: "Smith"
+    phone:
+      type: string
+      description: Phone number
+      example: "+1234567890"
+    metadata:
+      type: object
+      description: Additional user metadata
+      additionalProperties: true
+
+UpdateUserRequest:
+  type: object
+  properties:
+    email:
+      type: string
+      format: email
+      description: User email address
+      example: "updated@example.com"
+    username:
+      type: string
+      minLength: 3
+      maxLength: 50
+      description: Username
+      example: "updated_user"
+    first_name:
+      type: string
+      description: First name
+      example: "Jane"
+    last_name:
+      type: string
+      description: Last name
+      example: "Smith"
+    phone:
+      type: string
+      description: Phone number
+      example: "+1234567890"
+    avatar_url:
+      type: string
+      format: uri
+      description: Avatar image URL
+      example: "https://example.com/avatars/jane.jpg"
+    status:
+      $ref: '#/UserStatus'
+    metadata:
+      type: object
+      description: Additional user metadata
+      additionalProperties: true
+
+UserWithRoles:
+  allOf:
+    - $ref: '#/User'
+    - type: object
+      properties:
+        roles:
+          type: array
+          items:
+            $ref: './rbac.yaml#/Role'
+          description: User roles
+
+UserPermissions:
+  type: object
+  properties:
+    user_id:
+      type: string
+      format: uuid
+      description: User identifier
+      example: "660e8400-e29b-41d4-a716-446655440000"
+    permissions:
+      type: array
+      items:
+        $ref: './rbac.yaml#/Permission'
+      description: User permissions

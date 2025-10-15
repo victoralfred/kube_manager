@@ -1,0 +1,359 @@
+tenants:
+  get:
+    tags:
+      - tenants
+    summary: List tenants
+    description: Retrieve a paginated list of tenants
+    operationId: listTenants
+    parameters:
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [active, suspended, inactive, deleted]
+        description: Filter by tenant status
+      - name: search
+        in: query
+        schema:
+          type: string
+        description: Search by name or slug
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 10
+        description: Number of results per page
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+        description: Number of items to skip
+      - name: sort_by
+        in: query
+        schema:
+          type: string
+          default: created_at
+        description: Field to sort by
+      - name: sort_desc
+        in: query
+        schema:
+          type: boolean
+          default: false
+        description: Sort in descending order
+    responses:
+      '200':
+        description: List of tenants
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '../schemas/common.yaml#/PaginatedResponse'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items:
+                        $ref: '../schemas/tenant.yaml#/Tenant'
+      '500':
+        description: Internal server error
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'
+  post:
+    tags:
+      - tenants
+    summary: Create tenant
+    description: Create a new tenant
+    operationId: createTenant
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/tenant.yaml#/CreateTenantRequest'
+    responses:
+      '201':
+        description: Tenant created successfully
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/tenant.yaml#/Tenant'
+      '400':
+        description: Bad request
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'
+      '409':
+        description: Tenant already exists
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'
+      '500':
+        description: Internal server error
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'
+
+tenants_id:
+  get:
+    tags:
+      - tenants
+    summary: Get tenant by ID
+    description: Retrieve a tenant by its unique identifier
+    operationId: getTenant
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Tenant ID
+    responses:
+      '200':
+        description: Tenant details
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/tenant.yaml#/Tenant'
+      '404':
+        description: Tenant not found
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'
+      '500':
+        description: Internal server error
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'
+  put:
+    tags:
+      - tenants
+    summary: Update tenant
+    description: Update tenant information
+    operationId: updateTenant
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Tenant ID
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/tenant.yaml#/UpdateTenantRequest'
+    responses:
+      '200':
+        description: Tenant updated successfully
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/tenant.yaml#/Tenant'
+      '400':
+        description: Bad request
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'
+      '404':
+        description: Tenant not found
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'
+      '500':
+        description: Internal server error
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'
+  delete:
+    tags:
+      - tenants
+    summary: Delete tenant
+    description: Soft delete a tenant
+    operationId: deleteTenant
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Tenant ID
+    responses:
+      '204':
+        description: Tenant deleted successfully
+      '404':
+        description: Tenant not found
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'
+      '500':
+        description: Internal server error
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'
+
+tenants_slug:
+  get:
+    tags:
+      - tenants
+    summary: Get tenant by slug
+    description: Retrieve a tenant by its slug
+    operationId: getTenantBySlug
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Tenant slug
+    responses:
+      '200':
+        description: Tenant details
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/tenant.yaml#/Tenant'
+      '404':
+        description: Tenant not found
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'
+      '500':
+        description: Internal server error
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'
+
+tenants_suspend:
+  post:
+    tags:
+      - tenants
+    summary: Suspend tenant
+    description: Suspend a tenant's access
+    operationId: suspendTenant
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Tenant ID
+    responses:
+      '200':
+        description: Tenant suspended successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Tenant suspended successfully"
+      '404':
+        description: Tenant not found
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'
+      '500':
+        description: Internal server error
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'
+
+tenants_activate:
+  post:
+    tags:
+      - tenants
+    summary: Activate tenant
+    description: Activate a suspended or inactive tenant
+    operationId: activateTenant
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Tenant ID
+    responses:
+      '200':
+        description: Tenant activated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Tenant activated successfully"
+      '404':
+        description: Tenant not found
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'
+      '500':
+        description: Internal server error
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'
+
+tenants_stats:
+  get:
+    tags:
+      - tenants
+    summary: Get tenant statistics
+    description: Retrieve usage statistics for a tenant
+    operationId: getTenantStats
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Tenant ID
+    responses:
+      '200':
+        description: Tenant statistics
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/tenant.yaml#/TenantStats'
+      '404':
+        description: Tenant not found
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'
+      '500':
+        description: Internal server error
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/common.yaml#/Error'

@@ -1,0 +1,267 @@
+Role:
+  type: object
+  required:
+    - id
+    - tenant_id
+    - name
+    - slug
+    - created_at
+    - updated_at
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Unique role identifier
+      example: "770e8400-e29b-41d4-a716-446655440000"
+    tenant_id:
+      type: string
+      format: uuid
+      description: Tenant identifier
+      example: "550e8400-e29b-41d4-a716-446655440000"
+    name:
+      type: string
+      description: Role name
+      example: "Administrator"
+    slug:
+      type: string
+      pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+      description: URL-friendly role identifier
+      example: "admin"
+    description:
+      type: string
+      nullable: true
+      description: Role description
+      example: "Full system access"
+    is_system:
+      type: boolean
+      description: Whether this is a system-defined role
+      default: false
+      example: false
+    parent_role_id:
+      type: string
+      format: uuid
+      nullable: true
+      description: Parent role for hierarchy
+      example: null
+    permissions:
+      type: array
+      items:
+        $ref: '#/Permission'
+      description: Permissions assigned to this role
+    created_at:
+      type: string
+      format: date-time
+      description: Creation timestamp
+      example: "2025-10-15T10:30:00Z"
+    updated_at:
+      type: string
+      format: date-time
+      description: Last update timestamp
+      example: "2025-10-15T11:45:00Z"
+
+Permission:
+  type: object
+  required:
+    - id
+    - resource
+    - action
+    - created_at
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Unique permission identifier
+      example: "880e8400-e29b-41d4-a716-446655440000"
+    resource:
+      type: string
+      description: Resource type
+      example: "users"
+    action:
+      type: string
+      description: Action allowed on resource
+      example: "create"
+    description:
+      type: string
+      nullable: true
+      description: Permission description
+      example: "Create new users"
+    conditions:
+      type: object
+      description: Conditions for permission
+      additionalProperties: true
+      example:
+        max_users: 100
+        scope: "tenant"
+    created_at:
+      type: string
+      format: date-time
+      description: Creation timestamp
+      example: "2025-10-15T10:30:00Z"
+
+CreateRoleRequest:
+  type: object
+  required:
+    - name
+    - slug
+  properties:
+    name:
+      type: string
+      description: Role name
+      example: "Content Editor"
+    slug:
+      type: string
+      pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+      description: URL-friendly role identifier
+      example: "content-editor"
+    description:
+      type: string
+      description: Role description
+      example: "Can create and edit content"
+    parent_role_id:
+      type: string
+      format: uuid
+      description: Parent role for hierarchy
+      example: "770e8400-e29b-41d4-a716-446655440000"
+    permission_ids:
+      type: array
+      items:
+        type: string
+        format: uuid
+      description: Permission IDs to assign
+      example: ["880e8400-e29b-41d4-a716-446655440000"]
+
+UpdateRoleRequest:
+  type: object
+  properties:
+    name:
+      type: string
+      description: Role name
+      example: "Senior Content Editor"
+    description:
+      type: string
+      description: Role description
+      example: "Can create, edit, and publish content"
+    permission_ids:
+      type: array
+      items:
+        type: string
+        format: uuid
+      description: Permission IDs to assign
+      example: ["880e8400-e29b-41d4-a716-446655440000"]
+
+CreatePermissionRequest:
+  type: object
+  required:
+    - resource
+    - action
+  properties:
+    resource:
+      type: string
+      description: Resource type
+      example: "articles"
+    action:
+      type: string
+      description: Action allowed on resource
+      example: "publish"
+    description:
+      type: string
+      description: Permission description
+      example: "Publish articles"
+    conditions:
+      type: object
+      description: Conditions for permission
+      additionalProperties: true
+
+Policy:
+  type: object
+  required:
+    - id
+    - tenant_id
+    - name
+    - effect
+    - rules
+    - created_at
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Unique policy identifier
+      example: "990e8400-e29b-41d4-a716-446655440000"
+    tenant_id:
+      type: string
+      format: uuid
+      description: Tenant identifier
+      example: "550e8400-e29b-41d4-a716-446655440000"
+    name:
+      type: string
+      description: Policy name
+      example: "Content Management Policy"
+    description:
+      type: string
+      nullable: true
+      description: Policy description
+      example: "Defines content management rules"
+    effect:
+      type: string
+      enum:
+        - allow
+        - deny
+      description: Policy effect
+      example: "allow"
+    rules:
+      type: array
+      items:
+        $ref: '#/PolicyRule'
+      description: Policy rules
+    priority:
+      type: integer
+      description: Policy priority (higher = more important)
+      default: 0
+      example: 100
+    created_at:
+      type: string
+      format: date-time
+      description: Creation timestamp
+      example: "2025-10-15T10:30:00Z"
+    updated_at:
+      type: string
+      format: date-time
+      description: Last update timestamp
+      example: "2025-10-15T11:45:00Z"
+
+PolicyRule:
+  type: object
+  required:
+    - resource
+    - actions
+  properties:
+    resource:
+      type: string
+      description: Resource pattern
+      example: "articles:*"
+    actions:
+      type: array
+      items:
+        type: string
+      description: Allowed actions
+      example: ["read", "write", "delete"]
+    conditions:
+      type: object
+      description: Conditions for the rule
+      additionalProperties: true
+      example:
+        owner_only: true
+        status: ["draft", "published"]
+
+AssignRoleRequest:
+  type: object
+  required:
+    - role_ids
+  properties:
+    role_ids:
+      type: array
+      items:
+        type: string
+        format: uuid
+      description: Role IDs to assign
+      example: ["770e8400-e29b-41d4-a716-446655440000"]

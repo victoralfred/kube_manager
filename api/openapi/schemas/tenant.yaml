@@ -1,0 +1,203 @@
+Tenant:
+  type: object
+  required:
+    - id
+    - name
+    - slug
+    - status
+    - max_users
+    - max_storage
+    - contact_name
+    - contact_email
+    - created_at
+    - updated_at
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Unique tenant identifier
+      example: "550e8400-e29b-41d4-a716-446655440000"
+    name:
+      type: string
+      minLength: 3
+      maxLength: 100
+      description: Tenant name
+      example: "Acme Corporation"
+    slug:
+      type: string
+      pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+      minLength: 3
+      maxLength: 50
+      description: URL-friendly tenant identifier
+      example: "acme-corp"
+    status:
+      $ref: '#/TenantStatus'
+    settings:
+      type: object
+      description: Tenant-specific settings
+      additionalProperties: true
+      example:
+        theme: "dark"
+        timezone: "UTC"
+        features:
+          advanced_analytics: true
+    max_users:
+      type: integer
+      minimum: 1
+      description: Maximum number of users allowed
+      example: 100
+    max_storage:
+      type: integer
+      format: int64
+      minimum: 1
+      description: Maximum storage in bytes
+      example: 10737418240
+    contact_name:
+      type: string
+      description: Primary contact name
+      example: "John Doe"
+    contact_email:
+      type: string
+      format: email
+      description: Primary contact email
+      example: "john.doe@acme.com"
+    created_at:
+      type: string
+      format: date-time
+      description: Creation timestamp
+      example: "2025-10-15T10:30:00Z"
+    updated_at:
+      type: string
+      format: date-time
+      description: Last update timestamp
+      example: "2025-10-15T11:45:00Z"
+    deleted_at:
+      type: string
+      format: date-time
+      nullable: true
+      description: Soft deletion timestamp
+      example: null
+
+TenantStatus:
+  type: string
+  enum:
+    - active
+    - suspended
+    - inactive
+    - deleted
+  description: Current status of the tenant
+  example: "active"
+
+CreateTenantRequest:
+  type: object
+  required:
+    - name
+    - slug
+    - contact_name
+    - contact_email
+    - max_users
+    - max_storage
+  properties:
+    name:
+      type: string
+      minLength: 3
+      maxLength: 100
+      description: Tenant name
+      example: "Acme Corporation"
+    slug:
+      type: string
+      pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+      minLength: 3
+      maxLength: 50
+      description: URL-friendly tenant identifier
+      example: "acme-corp"
+    contact_name:
+      type: string
+      description: Primary contact name
+      example: "John Doe"
+    contact_email:
+      type: string
+      format: email
+      description: Primary contact email
+      example: "john.doe@acme.com"
+    max_users:
+      type: integer
+      minimum: 1
+      description: Maximum number of users allowed
+      example: 100
+    max_storage:
+      type: integer
+      format: int64
+      minimum: 1
+      description: Maximum storage in bytes
+      example: 10737418240
+    settings:
+      type: object
+      description: Tenant-specific settings
+      additionalProperties: true
+      example:
+        theme: "light"
+        timezone: "America/New_York"
+
+UpdateTenantRequest:
+  type: object
+  properties:
+    name:
+      type: string
+      minLength: 3
+      maxLength: 100
+      description: Tenant name
+      example: "Acme Corporation Updated"
+    status:
+      $ref: '#/TenantStatus'
+    contact_name:
+      type: string
+      description: Primary contact name
+      example: "Jane Doe"
+    contact_email:
+      type: string
+      format: email
+      description: Primary contact email
+      example: "jane.doe@acme.com"
+    max_users:
+      type: integer
+      minimum: 1
+      description: Maximum number of users allowed
+      example: 150
+    max_storage:
+      type: integer
+      format: int64
+      minimum: 1
+      description: Maximum storage in bytes
+      example: 21474836480
+    settings:
+      type: object
+      description: Tenant-specific settings
+      additionalProperties: true
+
+TenantStats:
+  type: object
+  required:
+    - tenant_id
+    - user_count
+    - storage_used
+    - resource_used
+  properties:
+    tenant_id:
+      type: string
+      format: uuid
+      description: Tenant identifier
+      example: "550e8400-e29b-41d4-a716-446655440000"
+    user_count:
+      type: integer
+      description: Current number of users
+      example: 45
+    storage_used:
+      type: integer
+      format: int64
+      description: Storage used in bytes
+      example: 5368709120
+    resource_used:
+      type: integer
+      description: Number of resources allocated
+      example: 12

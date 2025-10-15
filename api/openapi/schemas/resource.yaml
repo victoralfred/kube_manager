@@ -1,0 +1,216 @@
+Resource:
+  type: object
+  required:
+    - id
+    - tenant_id
+    - name
+    - type
+    - status
+    - created_at
+    - updated_at
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Unique resource identifier
+      example: "aa0e8400-e29b-41d4-a716-446655440000"
+    tenant_id:
+      type: string
+      format: uuid
+      description: Tenant identifier
+      example: "550e8400-e29b-41d4-a716-446655440000"
+    name:
+      type: string
+      description: Resource name
+      example: "Production Database"
+    type:
+      $ref: '#/ResourceType'
+    status:
+      $ref: '#/ResourceStatus'
+    storage_used:
+      type: integer
+      format: int64
+      description: Storage used in bytes
+      example: 1073741824
+    cpu_allocated:
+      type: number
+      format: float
+      description: CPU cores allocated
+      example: 2.5
+    memory_allocated:
+      type: integer
+      format: int64
+      description: Memory allocated in bytes
+      example: 4294967296
+    configuration:
+      type: object
+      description: Resource configuration
+      additionalProperties: true
+      example:
+        region: "us-east-1"
+        replicas: 3
+        backup_enabled: true
+    tags:
+      type: array
+      items:
+        type: string
+      description: Resource tags
+      example: ["production", "database", "critical"]
+    created_by:
+      type: string
+      format: uuid
+      description: User who created the resource
+      example: "660e8400-e29b-41d4-a716-446655440000"
+    created_at:
+      type: string
+      format: date-time
+      description: Creation timestamp
+      example: "2025-10-15T10:30:00Z"
+    updated_at:
+      type: string
+      format: date-time
+      description: Last update timestamp
+      example: "2025-10-15T11:45:00Z"
+    deleted_at:
+      type: string
+      format: date-time
+      nullable: true
+      description: Soft deletion timestamp
+      example: null
+
+ResourceType:
+  type: string
+  enum:
+    - compute
+    - storage
+    - database
+    - network
+    - kubernetes
+    - container
+  description: Type of resource
+  example: "database"
+
+ResourceStatus:
+  type: string
+  enum:
+    - active
+    - provisioning
+    - suspended
+    - terminated
+    - error
+  description: Current status of the resource
+  example: "active"
+
+CreateResourceRequest:
+  type: object
+  required:
+    - name
+    - type
+  properties:
+    name:
+      type: string
+      description: Resource name
+      example: "Staging Database"
+    type:
+      $ref: '#/ResourceType'
+    storage_used:
+      type: integer
+      format: int64
+      description: Initial storage in bytes
+      example: 536870912
+    cpu_allocated:
+      type: number
+      format: float
+      description: CPU cores to allocate
+      example: 1.0
+    memory_allocated:
+      type: integer
+      format: int64
+      description: Memory to allocate in bytes
+      example: 2147483648
+    configuration:
+      type: object
+      description: Resource configuration
+      additionalProperties: true
+      example:
+        region: "us-west-2"
+        replicas: 1
+    tags:
+      type: array
+      items:
+        type: string
+      description: Resource tags
+      example: ["staging", "database"]
+
+UpdateResourceRequest:
+  type: object
+  properties:
+    name:
+      type: string
+      description: Resource name
+      example: "Updated Database"
+    status:
+      $ref: '#/ResourceStatus'
+    storage_used:
+      type: integer
+      format: int64
+      description: Storage used in bytes
+      example: 1073741824
+    cpu_allocated:
+      type: number
+      format: float
+      description: CPU cores allocated
+      example: 3.0
+    memory_allocated:
+      type: integer
+      format: int64
+      description: Memory allocated in bytes
+      example: 8589934592
+    configuration:
+      type: object
+      description: Resource configuration
+      additionalProperties: true
+    tags:
+      type: array
+      items:
+        type: string
+      description: Resource tags
+
+ResourceUsage:
+  type: object
+  properties:
+    resource_id:
+      type: string
+      format: uuid
+      description: Resource identifier
+      example: "aa0e8400-e29b-41d4-a716-446655440000"
+    cpu_usage:
+      type: number
+      format: float
+      description: Current CPU usage percentage
+      example: 65.5
+    memory_usage:
+      type: number
+      format: float
+      description: Current memory usage percentage
+      example: 72.3
+    storage_usage:
+      type: number
+      format: float
+      description: Current storage usage percentage
+      example: 45.8
+    network_in:
+      type: integer
+      format: int64
+      description: Network bytes in
+      example: 1073741824
+    network_out:
+      type: integer
+      format: int64
+      description: Network bytes out
+      example: 536870912
+    timestamp:
+      type: string
+      format: date-time
+      description: Usage timestamp
+      example: "2025-10-15T12:00:00Z"
