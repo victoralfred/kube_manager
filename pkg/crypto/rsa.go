@@ -17,6 +17,18 @@ const (
 	RSAKeySize = 4096
 )
 
+// Type aliases to abstract stdlib crypto types
+type (
+	// PrivateKey is an alias for rsa.PrivateKey
+	PrivateKey = rsa.PrivateKey
+
+	// PublicKey is an alias for rsa.PublicKey
+	PublicKey = rsa.PublicKey
+
+	// Hash is an alias for crypto.Hash
+	Hash = crypto.Hash
+)
+
 // GenerateRSAKeyPair generates a new RSA key pair
 func GenerateRSAKeyPair(bits int) (*rsa.PrivateKey, error) {
 	if bits < 2048 {

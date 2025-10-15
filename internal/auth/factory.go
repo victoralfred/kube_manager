@@ -1,9 +1,9 @@
 package auth
 
 import (
-	"crypto/rsa"
 	"time"
 
+	"github.com/victoralfred/kube_manager/pkg/crypto"
 	"github.com/victoralfred/kube_manager/pkg/database"
 	"github.com/victoralfred/kube_manager/pkg/logger"
 )
@@ -19,8 +19,8 @@ type Module struct {
 
 // Config holds configuration for auth module
 type Config struct {
-	PrivateKey      *rsa.PrivateKey
-	PublicKey       *rsa.PublicKey
+	PrivateKey      *crypto.PrivateKey
+	PublicKey       *crypto.PublicKey
 	KeyID           string
 	AccessTokenTTL  time.Duration
 	RefreshTokenTTL time.Duration

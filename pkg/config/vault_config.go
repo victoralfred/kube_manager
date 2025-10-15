@@ -2,10 +2,10 @@ package config
 
 import (
 	"context"
-	"crypto/rsa"
 	"fmt"
 	"time"
 
+	"github.com/victoralfred/kube_manager/pkg/crypto"
 	"github.com/victoralfred/kube_manager/pkg/logger"
 	"github.com/victoralfred/kube_manager/pkg/secrets"
 	"github.com/victoralfred/kube_manager/pkg/vault"
@@ -38,8 +38,8 @@ type SecureConfig struct {
 
 // SecureJWTConfig holds JWT configuration with RSA keys
 type SecureJWTConfig struct {
-	PrivateKey      *rsa.PrivateKey
-	PublicKey       *rsa.PublicKey
+	PrivateKey      *crypto.PrivateKey
+	PublicKey       *crypto.PublicKey
 	KeyID           string
 	AccessTokenTTL  time.Duration
 	RefreshTokenTTL time.Duration
@@ -47,8 +47,8 @@ type SecureJWTConfig struct {
 
 // SecureCSRFConfig holds CSRF configuration with RSA keys
 type SecureCSRFConfig struct {
-	PrivateKey *rsa.PrivateKey
-	PublicKey  *rsa.PublicKey
+	PrivateKey *crypto.PrivateKey
+	PublicKey  *crypto.PublicKey
 	KeyID      string
 }
 

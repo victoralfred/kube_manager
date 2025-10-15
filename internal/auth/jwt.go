@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -13,8 +12,8 @@ import (
 
 // JWTService handles JWT token operations using RSA
 type JWTService struct {
-	privateKey       *rsa.PrivateKey
-	publicKey        *rsa.PublicKey
+	privateKey       *crypto.PrivateKey
+	publicKey        *crypto.PublicKey
 	keyID            string
 	accessTokenTTL   time.Duration
 	refreshTokenTTL  time.Duration
@@ -22,8 +21,8 @@ type JWTService struct {
 
 // NewJWTService creates a new JWT service with RSA keys
 func NewJWTService(
-	privateKey *rsa.PrivateKey,
-	publicKey *rsa.PublicKey,
+	privateKey *crypto.PrivateKey,
+	publicKey *crypto.PublicKey,
 	keyID string,
 	accessTTL,
 	refreshTTL time.Duration,

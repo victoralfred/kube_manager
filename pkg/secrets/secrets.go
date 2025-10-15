@@ -2,7 +2,8 @@ package secrets
 
 import (
 	"context"
-	"crypto/rsa"
+
+	"github.com/victoralfred/kube_manager/pkg/crypto"
 )
 
 // Manager defines interface for secrets management
@@ -50,14 +51,14 @@ type RedisCredentials struct {
 
 // JWTKeys holds RSA key pairs for JWT operations
 type JWTKeys struct {
-	PrivateKey *rsa.PrivateKey // For signing tokens
-	PublicKey  *rsa.PublicKey  // For verifying tokens
-	KeyID      string          // Key identifier for rotation
+	PrivateKey *crypto.PrivateKey // For signing tokens
+	PublicKey  *crypto.PublicKey  // For verifying tokens
+	KeyID      string             // Key identifier for rotation
 }
 
 // CSRFKey holds RSA key pair for CSRF tokens
 type CSRFKey struct {
-	PrivateKey *rsa.PrivateKey
-	PublicKey  *rsa.PublicKey
+	PrivateKey *crypto.PrivateKey
+	PublicKey  *crypto.PublicKey
 	KeyID      string
 }
