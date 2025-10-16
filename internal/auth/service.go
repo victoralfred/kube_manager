@@ -97,11 +97,13 @@ func (s *service) Login(ctx context.Context, req LoginRequest, ipAddress, userAg
 
 	return &LoginResponse{
 		User: UserInfo{
-			ID:       user.ID,
-			TenantID: user.TenantID,
-			Email:    user.Email,
-			Name:     user.Name,
-			Roles:    user.Roles,
+			ID:            user.ID,
+			TenantID:      user.TenantID,
+			Email:         user.Email,
+			FirstName:     user.FirstName,
+			LastName:      user.LastName,
+			EmailVerified: user.EmailVerified,
+			Roles:         user.Roles,
 		},
 		Tokens: *tokens,
 	}, nil
@@ -142,7 +144,8 @@ func (s *service) Register(ctx context.Context, req RegisterRequest) (*UserInfo,
 		TenantID:     tenantID,
 		Email:        req.Email,
 		PasswordHash: string(passwordHash),
-		Name:         req.Name,
+		FirstName:    req.FirstName,
+		LastName:     req.LastName,
 		Status:       "active",
 		Roles:        []string{},
 		CreatedAt:    now,
@@ -156,11 +159,13 @@ func (s *service) Register(ctx context.Context, req RegisterRequest) (*UserInfo,
 	s.log.WithField("user_id", user.ID).WithField("tenant_id", user.TenantID).Info("user registered successfully")
 
 	return &UserInfo{
-		ID:       user.ID,
-		TenantID: user.TenantID,
-		Email:    user.Email,
-		Name:     user.Name,
-		Roles:    user.Roles,
+		ID:            user.ID,
+		TenantID:      user.TenantID,
+		Email:         user.Email,
+		FirstName:     user.FirstName,
+		LastName:      user.LastName,
+		EmailVerified: user.EmailVerified,
+		Roles:         user.Roles,
 	}, nil
 }
 
