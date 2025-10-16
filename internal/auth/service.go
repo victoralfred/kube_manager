@@ -14,7 +14,6 @@ import (
 type Service interface {
 	// Authentication
 	Login(ctx context.Context, req LoginRequest, ipAddress, userAgent string) (*LoginResponse, error)
-	Register(ctx context.Context, req RegisterRequest) (*UserInfo, error)
 	RefreshToken(ctx context.Context, refreshToken, ipAddress, userAgent string) (*TokenPair, error)
 	Logout(ctx context.Context, refreshToken string) error
 	RevokeAllSessions(ctx context.Context, userID string) error
@@ -106,66 +105,6 @@ func (s *service) Login(ctx context.Context, req LoginRequest, ipAddress, userAg
 			Roles:         user.Roles,
 		},
 		Tokens: *tokens,
-	}, nil
-}
-
-// Register creates a new user account
-func (s *service) Register(ctx context.Context, req RegisterRequest) (*UserInfo, error) {
-	// Get tenant ID from context or request
-	tenantID := req.TenantID
-	if tenantID == "" {
-		tenantID = getTenantIDFromContext(ctx)
-	}
-
-	if tenantID == "" {
-		return nil, ErrTenantNotFound
-	}
-
-	// Check if email already exists
-	existing, err := s.repo.GetUserByEmail(ctx, tenantID, req.Email)
-	if err != nil && err != ErrUserNotFound {
-		return nil, fmt.Errorf("failed to check existing user: %w", err)
-	}
-
-	if existing != nil {
-		return nil, ErrEmailAlreadyExists
-	}
-
-	// Hash password
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %w", err)
-	}
-
-	// Create user
-	now := time.Now()
-	user := &UserCredentials{
-		ID:           uuid.New().String(),
-		TenantID:     tenantID,
-		Email:        req.Email,
-		PasswordHash: string(passwordHash),
-		FirstName:    req.FirstName,
-		LastName:     req.LastName,
-		Status:       "active",
-		Roles:        []string{},
-		CreatedAt:    now,
-		UpdatedAt:    now,
-	}
-
-	if err := s.repo.CreateUser(ctx, user); err != nil {
-		return nil, fmt.Errorf("failed to create user: %w", err)
-	}
-
-	s.log.WithField("user_id", user.ID).WithField("tenant_id", user.TenantID).Info("user registered successfully")
-
-	return &UserInfo{
-		ID:            user.ID,
-		TenantID:      user.TenantID,
-		Email:         user.Email,
-		FirstName:     user.FirstName,
-		LastName:      user.LastName,
-		EmailVerified: user.EmailVerified,
-		Roles:         user.Roles,
 	}, nil
 }
 

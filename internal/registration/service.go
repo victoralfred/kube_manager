@@ -17,7 +17,7 @@ import (
 
 // Service handles complete user and tenant registration
 type Service interface {
-	Register(ctx context.Context, req auth.RegisterRequest) (*RegistrationResponse, error)
+	Register(ctx context.Context, req auth.RegisterRequest) (any, error)
 	VerifyEmail(ctx context.Context, req auth.VerifyEmailRequest) error
 	ResendVerification(ctx context.Context, req auth.ResendVerificationRequest) error
 }
@@ -57,7 +57,7 @@ func NewService(
 }
 
 // Register creates a new organization (tenant) with the first user as admin
-func (s *service) Register(ctx context.Context, req auth.RegisterRequest) (*RegistrationResponse, error) {
+func (s *service) Register(ctx context.Context, req auth.RegisterRequest) (any, error) {
 	// Validate request
 	if err := s.validateRegisterRequest(req); err != nil {
 		return nil, err

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -10,7 +11,7 @@ import (
 
 // RegistrationService interface for handlers
 type RegistrationService interface {
-	Register(ctx context.Context, req RegisterRequest) (interface{}, error)
+	Register(ctx context.Context, req RegisterRequest) (any, error)
 	VerifyEmail(ctx context.Context, req VerifyEmailRequest) error
 	ResendVerification(ctx context.Context, req ResendVerificationRequest) error
 }

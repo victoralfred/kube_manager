@@ -12,7 +12,7 @@ import (
 // RegistrationServiceInterface defines the interface for registration operations
 // This allows the auth module to work with the registration module without importing it
 type RegistrationServiceInterface interface {
-	Register(ctx context.Context, req RegisterRequest) (interface{}, error)
+	Register(ctx context.Context, req RegisterRequest) (any, error)
 	VerifyEmail(ctx context.Context, req VerifyEmailRequest) error
 	ResendVerification(ctx context.Context, req ResendVerificationRequest) error
 }
