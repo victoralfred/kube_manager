@@ -22,6 +22,7 @@ import (
 	"github.com/victoralfred/kube_manager/pkg/logger"
 	"github.com/victoralfred/kube_manager/pkg/metrics"
 	"github.com/victoralfred/kube_manager/pkg/middleware"
+	"github.com/victoralfred/kube_manager/pkg/migrations"
 )
 
 func main() {
@@ -64,6 +65,14 @@ func main() {
 		log.Fatal("database health check failed", err)
 	}
 	log.Info("database connected successfully")
+
+	// Run database migrations
+	log.Info("checking database migrations")
+	migrationRunner := database.NewMigrationRunner(db, log)
+	if err := migrationRunner.RunMigrations(migrations.FS, "files"); err != nil {
+		log.Fatal("failed to run database migrations", err)
+	}
+	log.Info("database migrations completed successfully")
 
 	// Initialize tenant module
 	log.Info("initializing tenant module")
