@@ -34,7 +34,7 @@ func RegisterCoreResources(registry *ResourceRegistry) error {
 	}
 
 	for _, resource := range coreResources {
-		if err := registry.Register(resource); err != nil {
+		if err := registry.RegisterReserved(resource); err != nil {
 			return err
 		}
 	}

@@ -46,6 +46,30 @@ func (r *ResourceRegistry) Register(def ResourceDefinition) error {
 	return nil
 }
 
+// RegisterReserved registers a system resource bypassing reserved name checks
+// This should only be used during system initialization for core resources
+func (r *ResourceRegistry) RegisterReserved(def ResourceDefinition) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Basic validation only (skip reserved name check)
+	if len(def.Name) < 3 || len(def.Name) > 50 {
+		return ErrInvalidResourceName
+	}
+
+	matched, _ := regexp.MatchString(`^[a-z][a-z0-9_]{2,49}$`, def.Name)
+	if !matched {
+		return ErrInvalidResourceName
+	}
+
+	if len(def.Actions) == 0 {
+		return ErrInvalidResource
+	}
+
+	r.resources[def.Name] = def
+	return nil
+}
+
 // Get retrieves a resource definition
 func (r *ResourceRegistry) Get(name string) (ResourceDefinition, bool) {
 	r.mu.RLock()
