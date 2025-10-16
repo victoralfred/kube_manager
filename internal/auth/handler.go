@@ -10,13 +10,15 @@ import (
 
 // Handler handles HTTP requests for authentication
 type Handler struct {
-	service Service
+	service             Service
+	registrationService RegistrationService
 }
 
 // NewHandler creates a new auth handler
-func NewHandler(service Service) *Handler {
+func NewHandler(service Service, registrationService RegistrationService) *Handler {
 	return &Handler{
-		service: service,
+		service:             service,
+		registrationService: registrationService,
 	}
 }
 
@@ -40,7 +42,7 @@ func (h *Handler) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// Register handles user registration requests
+// Register handles user registration requests (with tenant creation)
 func (h *Handler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -48,13 +50,45 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
-	user, err := h.service.Register(c.Request.Context(), req)
+	response, err := h.registrationService.Register(c.Request.Context(), req)
 	if err != nil {
 		handleAuthError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusCreated, user)
+	c.JSON(http.StatusCreated, response)
+}
+
+// VerifyEmail handles email verification requests
+func (h *Handler) VerifyEmail(c *gin.Context) {
+	var req VerifyEmailRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.BadRequest("Invalid request body"))
+		return
+	}
+
+	if err := h.registrationService.VerifyEmail(c.Request.Context(), req); err != nil {
+		handleAuthError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Email verified successfully"})
+}
+
+// ResendVerification handles resend verification email requests
+func (h *Handler) ResendVerification(c *gin.Context) {
+	var req ResendVerificationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.BadRequest("Invalid request body"))
+		return
+	}
+
+	if err := h.registrationService.ResendVerification(c.Request.Context(), req); err != nil {
+		handleAuthError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Verification email sent"})
 }
 
 // RefreshToken handles token refresh requests
