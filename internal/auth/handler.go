@@ -8,6 +8,13 @@ import (
 	"github.com/victoralfred/kube_manager/pkg/errors"
 )
 
+// RegistrationService interface for handlers
+type RegistrationService interface {
+	Register(ctx context.Context, req RegisterRequest) (interface{}, error)
+	VerifyEmail(ctx context.Context, req VerifyEmailRequest) error
+	ResendVerification(ctx context.Context, req ResendVerificationRequest) error
+}
+
 // Handler handles HTTP requests for authentication
 type Handler struct {
 	service             Service

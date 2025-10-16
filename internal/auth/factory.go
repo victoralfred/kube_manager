@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"time"
 
 	"github.com/victoralfred/kube_manager/pkg/crypto"
@@ -8,15 +9,22 @@ import (
 	"github.com/victoralfred/kube_manager/pkg/logger"
 )
 
+// RegistrationServiceInterface defines the interface for registration operations
+// This allows the auth module to work with the registration module without importing it
+type RegistrationServiceInterface interface {
+	Register(ctx context.Context, req RegisterRequest) (interface{}, error)
+	VerifyEmail(ctx context.Context, req VerifyEmailRequest) error
+	ResendVerification(ctx context.Context, req ResendVerificationRequest) error
+}
+
 // Module holds all auth components
 type Module struct {
-	Repository           Repository
-	VerificationRepo     VerificationRepository
-	JWTService           *JWTService
-	Service              Service
-	RegistrationService  RegistrationService
-	Handler              *Handler
-	TokenValidator       *TokenValidator
+	Repository       Repository
+	VerificationRepo VerificationRepository
+	JWTService       *JWTService
+	Service          Service
+	Handler          *Handler
+	TokenValidator   *TokenValidator
 }
 
 // Config holds configuration for auth module
@@ -57,13 +65,12 @@ func NewModule(db *database.DB, cfg Config, log *logger.Logger) *Module {
 		JWTService:       jwtService,
 		Service:          svc,
 		TokenValidator:   validator,
-		// Handler and RegistrationService set via SetRegistrationService
+		// Handler set via SetHandler after registration module is created
 	}
 }
 
-// SetRegistrationService sets the registration service and creates the handler
-// This should be called after tenant and rbac modules are created to avoid circular dependencies
-func (m *Module) SetRegistrationService(registrationService RegistrationService) {
-	m.RegistrationService = registrationService
+// SetHandler sets the handler with the registration service
+// This should be called after the registration module is created
+func (m *Module) SetHandler(registrationService RegistrationServiceInterface) {
 	m.Handler = NewHandler(m.Service, registrationService)
 }

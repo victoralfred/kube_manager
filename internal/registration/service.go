@@ -1,4 +1,4 @@
-package auth
+package registration
 
 import (
 	"context"
@@ -8,38 +8,45 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/victoralfred/kube_manager/internal/auth"
 	"github.com/victoralfred/kube_manager/internal/rbac"
 	"github.com/victoralfred/kube_manager/internal/tenant"
 	"github.com/victoralfred/kube_manager/pkg/logger"
 	"golang.org/x/crypto/bcrypt"
 )
 
-// RegistrationService handles complete user and tenant registration
-type RegistrationService interface {
-	Register(ctx context.Context, req RegisterRequest) (*RegistrationResponse, error)
-	VerifyEmail(ctx context.Context, req VerifyEmailRequest) error
-	ResendVerification(ctx context.Context, req ResendVerificationRequest) error
+// Service handles complete user and tenant registration
+type Service interface {
+	Register(ctx context.Context, req auth.RegisterRequest) (*RegistrationResponse, error)
+	VerifyEmail(ctx context.Context, req auth.VerifyEmailRequest) error
+	ResendVerification(ctx context.Context, req auth.ResendVerificationRequest) error
 }
 
-type registrationService struct {
-	authRepo         Repository
-	verificationRepo VerificationRepository
+// RegistrationResponse represents the response after successful registration
+type RegistrationResponse struct {
+	User   auth.UserInfo   `json:"user"`
+	Tokens *auth.TokenPair `json:"tokens,omitempty"`
+}
+
+type service struct {
+	authRepo         auth.Repository
+	verificationRepo auth.VerificationRepository
 	tenantService    tenant.Service
 	rbacService      rbac.Service
-	jwtService       *JWTService
+	jwtService       *auth.JWTService
 	log              *logger.Logger
 }
 
-// NewRegistrationService creates a new registration service
-func NewRegistrationService(
-	authRepo Repository,
-	verificationRepo VerificationRepository,
+// NewService creates a new registration service
+func NewService(
+	authRepo auth.Repository,
+	verificationRepo auth.VerificationRepository,
 	tenantService tenant.Service,
 	rbacService rbac.Service,
-	jwtService *JWTService,
+	jwtService *auth.JWTService,
 	log *logger.Logger,
-) RegistrationService {
-	return &registrationService{
+) Service {
+	return &service{
 		authRepo:         authRepo,
 		verificationRepo: verificationRepo,
 		tenantService:    tenantService,
@@ -49,14 +56,8 @@ func NewRegistrationService(
 	}
 }
 
-// RegistrationResponse represents the response after successful registration
-type RegistrationResponse struct {
-	User   UserInfo   `json:"user"`
-	Tokens *TokenPair `json:"tokens,omitempty"`
-}
-
 // Register creates a new organization (tenant) with the first user as admin
-func (s *registrationService) Register(ctx context.Context, req RegisterRequest) (*RegistrationResponse, error) {
+func (s *service) Register(ctx context.Context, req auth.RegisterRequest) (*RegistrationResponse, error) {
 	// Validate request
 	if err := s.validateRegisterRequest(req); err != nil {
 		return nil, err
@@ -68,8 +69,8 @@ func (s *registrationService) Register(ctx context.Context, req RegisterRequest)
 		Slug:         req.Domain,
 		ContactName:  req.FirstName + " " + req.LastName,
 		ContactEmail: req.Email,
-		MaxUsers:     100,                // Default limit
-		MaxStorage:   10737418240,        // 10GB default
+		MaxUsers:     100,                      // Default limit
+		MaxStorage:   10737418240,              // 10GB default
 		Settings:     map[string]interface{}{},
 	}
 
@@ -89,7 +90,7 @@ func (s *registrationService) Register(ctx context.Context, req RegisterRequest)
 
 	now := time.Now()
 	userID := uuid.New().String()
-	user := &UserCredentials{
+	user := &auth.UserCredentials{
 		ID:           userID,
 		TenantID:     newTenant.ID,
 		Email:        req.Email,
@@ -157,7 +158,7 @@ func (s *registrationService) Register(ctx context.Context, req RegisterRequest)
 		s.log.Error("failed to generate tokens", err)
 		// Don't fail registration, return without tokens
 		return &RegistrationResponse{
-			User: UserInfo{
+			User: auth.UserInfo{
 				ID:            userID,
 				TenantID:      newTenant.ID,
 				Email:         req.Email,
@@ -172,7 +173,7 @@ func (s *registrationService) Register(ctx context.Context, req RegisterRequest)
 	s.log.WithField("user_id", userID).WithField("tenant_id", newTenant.ID).Info("registration completed successfully")
 
 	return &RegistrationResponse{
-		User: UserInfo{
+		User: auth.UserInfo{
 			ID:            userID,
 			TenantID:      newTenant.ID,
 			Email:         req.Email,
@@ -186,7 +187,7 @@ func (s *registrationService) Register(ctx context.Context, req RegisterRequest)
 }
 
 // VerifyEmail verifies a user's email using the verification token
-func (s *registrationService) VerifyEmail(ctx context.Context, req VerifyEmailRequest) error {
+func (s *service) VerifyEmail(ctx context.Context, req auth.VerifyEmailRequest) error {
 	// Get verification token
 	token, err := s.verificationRepo.GetVerificationToken(ctx, req.Token)
 	if err != nil {
@@ -215,7 +216,7 @@ func (s *registrationService) VerifyEmail(ctx context.Context, req VerifyEmailRe
 }
 
 // ResendVerification resends the verification email
-func (s *registrationService) ResendVerification(ctx context.Context, req ResendVerificationRequest) error {
+func (s *service) ResendVerification(ctx context.Context, req auth.ResendVerificationRequest) error {
 	// Find user by email (need tenant context)
 	// For now, we'll implement a basic version
 	// This would be enhanced with proper tenant resolution
@@ -225,7 +226,7 @@ func (s *registrationService) ResendVerification(ctx context.Context, req Resend
 
 // Helper functions
 
-func (s *registrationService) validateRegisterRequest(req RegisterRequest) error {
+func (s *service) validateRegisterRequest(req auth.RegisterRequest) error {
 	if req.Email == "" {
 		return fmt.Errorf("email is required")
 	}
@@ -247,7 +248,7 @@ func (s *registrationService) validateRegisterRequest(req RegisterRequest) error
 	return nil
 }
 
-func (s *registrationService) generateVerificationToken(ctx context.Context, userID string) (string, error) {
+func (s *service) generateVerificationToken(ctx context.Context, userID string) (string, error) {
 	// Generate random token
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
@@ -256,7 +257,7 @@ func (s *registrationService) generateVerificationToken(ctx context.Context, use
 	tokenString := hex.EncodeToString(tokenBytes)
 
 	// Create verification token
-	token := &EmailVerificationToken{
+	token := &auth.EmailVerificationToken{
 		ID:        uuid.New().String(),
 		UserID:    userID,
 		Token:     tokenString,
