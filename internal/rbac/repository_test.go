@@ -18,16 +18,16 @@ import (
 // ========================================
 
 // setupTestDatabase creates a test database connection
-func setupTestDatabase(t *testing.T) (*database.DB, func()) {
+func setupTestDatabase(tb testing.TB) (*database.DB, func()) {
 	// Check if we should run database tests
 	if os.Getenv("RUN_DB_TESTS") != "true" {
-		t.Skip("Skipping database tests. Set RUN_DB_TESTS=true to run")
+		tb.Skip("Skipping database tests. Set RUN_DB_TESTS=true to run")
 	}
 
 	// Get test database URL from environment
 	dbURL := os.Getenv("TEST_DATABASE_URL")
 	if dbURL == "" {
-		t.Skip("TEST_DATABASE_URL not set")
+		tb.Skip("TEST_DATABASE_URL not set")
 	}
 
 	// Connect to test database
@@ -38,16 +38,16 @@ func setupTestDatabase(t *testing.T) (*database.DB, func()) {
 		ConnMaxLifetime: time.Hour,
 	})
 	if err != nil {
-		t.Fatalf("Failed to connect to test database: %v", err)
+		tb.Fatalf("Failed to connect to test database: %v", err)
 	}
 
 	// Return cleanup function
 	cleanup := func() {
 		// Clean up test data
-		cleanupTestData(t, db)
+		cleanupTestData(tb, db)
 		// Close connection
 		if err := db.Close(); err != nil {
-			t.Logf("Failed to close database: %v", err)
+			tb.Logf("Failed to close database: %v", err)
 		}
 	}
 
@@ -55,7 +55,7 @@ func setupTestDatabase(t *testing.T) (*database.DB, func()) {
 }
 
 // cleanupTestData removes all test data from database
-func cleanupTestData(t *testing.T, db *database.DB) {
+func cleanupTestData(tb testing.TB, db *database.DB) {
 	ctx := context.Background()
 
 	// Delete in correct order to respect foreign keys
@@ -73,7 +73,7 @@ func cleanupTestData(t *testing.T, db *database.DB) {
 		query := "DELETE FROM " + table + " WHERE created_at > NOW() - INTERVAL '1 hour'"
 		_, err := db.ExecContext(ctx, query)
 		if err != nil {
-			t.Logf("Warning: Failed to clean %s: %v", table, err)
+			tb.Logf("Warning: Failed to clean %s: %v", table, err)
 		}
 	}
 }
@@ -83,7 +83,7 @@ func cleanupTestData(t *testing.T, db *database.DB) {
 // ========================================
 
 // createTestTenantInDB creates a real tenant in the database
-func createTestTenantInDB(t *testing.T, db *database.DB, name string) string {
+func createTestTenantInDB(tb testing.TB, db *database.DB, name string) string {
 	ctx := context.Background()
 	tenantID := uuid.New().String()
 
@@ -93,13 +93,13 @@ func createTestTenantInDB(t *testing.T, db *database.DB, name string) string {
 	`
 
 	_, err := db.ExecContext(ctx, query, tenantID, name, name)
-	require.NoError(t, err, "Failed to create test tenant")
+	require.NoError(tb, err, "Failed to create test tenant")
 
 	return tenantID
 }
 
 // createTestUserInDB creates a test user in the database
-func createTestUserInDB(t *testing.T, db *database.DB, tenantID, email string) string {
+func createTestUserInDB(tb testing.TB, db *database.DB, tenantID, email string) string {
 	ctx := context.Background()
 	userID := uuid.New().String()
 
@@ -109,13 +109,29 @@ func createTestUserInDB(t *testing.T, db *database.DB, tenantID, email string) s
 	`
 
 	_, err := db.ExecContext(ctx, query, userID, tenantID, email)
-	require.NoError(t, err, "Failed to create test user")
+	require.NoError(tb, err, "Failed to create test user")
 
 	return userID
 }
 
+// createTestRoleInDB creates a real role in the database
+func createTestRoleInDB(tb testing.TB, db *database.DB, tenantID, name, slug string) string {
+	ctx := context.Background()
+	roleID := uuid.New().String()
+
+	query := `
+		INSERT INTO roles (id, tenant_id, name, slug, description, role_type, is_system, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, 'Test role', 'custom', false, NOW(), NOW())
+	`
+
+	_, err := db.ExecContext(ctx, query, roleID, tenantID, name, slug)
+	require.NoError(tb, err, "Failed to create test role")
+
+	return roleID
+}
+
 // createTestPermission creates a test permission
-func createTestPermission(t *testing.T, db *database.DB, resource, action string, scope rbac.PermissionScope) *rbac.Permission {
+func createTestPermission(tb testing.TB, db *database.DB, resource, action string, scope rbac.PermissionScope) *rbac.Permission {
 	ctx := context.Background()
 	permissionID := uuid.New().String()
 
@@ -127,7 +143,7 @@ func createTestPermission(t *testing.T, db *database.DB, resource, action string
 	`
 
 	err := db.QueryRowContext(ctx, query, permissionID, resource, action, scope, "Test permission").Scan(&permissionID)
-	require.NoError(t, err, "Failed to create test permission")
+	require.NoError(tb, err, "Failed to create test permission")
 
 	return &rbac.Permission{
 		ID:       permissionID,
