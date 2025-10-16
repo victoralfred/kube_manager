@@ -1,43 +1,32 @@
--- Insert default system permissions
-INSERT INTO permissions (id, resource, action, description) VALUES
--- Tenant permissions
-(uuid_generate_v4(), 'tenants', 'create', 'Create new tenants'),
-(uuid_generate_v4(), 'tenants', 'read', 'View tenant information'),
-(uuid_generate_v4(), 'tenants', 'update', 'Update tenant information'),
-(uuid_generate_v4(), 'tenants', 'delete', 'Delete tenants'),
-(uuid_generate_v4(), 'tenants', 'suspend', 'Suspend tenant access'),
-(uuid_generate_v4(), 'tenants', 'activate', 'Activate suspended tenants'),
+-- Migration 006: Additional permission seeding
+-- NOTE: Migration 003 already seeds core permissions, so this adds any additional ones
 
--- User permissions
-(uuid_generate_v4(), 'users', 'create', 'Create new users'),
-(uuid_generate_v4(), 'users', 'read', 'View user information'),
-(uuid_generate_v4(), 'users', 'update', 'Update user information'),
-(uuid_generate_v4(), 'users', 'delete', 'Delete users'),
-(uuid_generate_v4(), 'users', 'assign_roles', 'Assign roles to users'),
+-- Insert additional system permissions with proper scope
+INSERT INTO permissions (id, resource, action, scope, requires_ownership, description) VALUES
+-- Additional tenant permissions (system scope)
+(gen_random_uuid(), 'tenant', 'activate', 'system', false, 'Activate suspended tenants'),
 
--- Role permissions
-(uuid_generate_v4(), 'roles', 'create', 'Create new roles'),
-(uuid_generate_v4(), 'roles', 'read', 'View role information'),
-(uuid_generate_v4(), 'roles', 'update', 'Update role information'),
-(uuid_generate_v4(), 'roles', 'delete', 'Delete roles'),
+-- Additional user permissions (tenant scope)
+(gen_random_uuid(), 'user', 'assign_roles', 'tenant', false, 'Assign roles to users'),
 
--- Permission permissions
-(uuid_generate_v4(), 'permissions', 'create', 'Create new permissions'),
-(uuid_generate_v4(), 'permissions', 'read', 'View permission information'),
-(uuid_generate_v4(), 'permissions', 'delete', 'Delete permissions'),
+-- Permission management (tenant scope - for admins to manage custom permissions)
+(gen_random_uuid(), 'permission', 'create', 'tenant', false, 'Create new permissions'),
+(gen_random_uuid(), 'permission', 'read', 'tenant', false, 'View permission information'),
+(gen_random_uuid(), 'permission', 'delete', 'tenant', false, 'Delete permissions'),
 
--- Resource permissions
-(uuid_generate_v4(), 'resources', 'create', 'Create new resources'),
-(uuid_generate_v4(), 'resources', 'read', 'View resource information'),
-(uuid_generate_v4(), 'resources', 'update', 'Update resource information'),
-(uuid_generate_v4(), 'resources', 'delete', 'Delete resources'),
+-- Audit log permissions (tenant scope)
+(gen_random_uuid(), 'audit_log', 'read', 'tenant', false, 'View audit logs'),
 
--- Audit log permissions
-(uuid_generate_v4(), 'audit_logs', 'read', 'View audit logs'),
-
--- Policy permissions
-(uuid_generate_v4(), 'policies', 'create', 'Create new policies'),
-(uuid_generate_v4(), 'policies', 'read', 'View policy information'),
-(uuid_generate_v4(), 'policies', 'update', 'Update policy information'),
-(uuid_generate_v4(), 'policies', 'delete', 'Delete policies')
+-- Policy permissions (tenant scope)
+(gen_random_uuid(), 'policy', 'create', 'tenant', false, 'Create new policies'),
+(gen_random_uuid(), 'policy', 'read', 'tenant', false, 'View policy information'),
+(gen_random_uuid(), 'policy', 'update', 'tenant', false, 'Update policy information'),
+(gen_random_uuid(), 'policy', 'delete', 'tenant', false, 'Delete policies')
 ON CONFLICT (resource, action) DO NOTHING;
+
+-- Register additional resources
+INSERT INTO resource_registry (name, description, scope, actions, created_by) VALUES
+('audit_log', 'Audit log management', 'tenant', ARRAY['read'], 'system'),
+('policy', 'Policy management', 'tenant', ARRAY['create', 'read', 'update', 'delete'], 'system'),
+('permission', 'Permission management', 'tenant', ARRAY['create', 'read', 'delete'], 'system')
+ON CONFLICT (name, tenant_id) DO NOTHING;
