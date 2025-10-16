@@ -113,6 +113,14 @@ func main() {
 		Cache:    cacheInstance,
 		CacheTTL: 15 * time.Minute,
 	}, log)
+
+	// Register core resources at startup
+	log.Info("registering core resources")
+	if err := rbac.RegisterCoreResources(rbacModule.GetRegistry()); err != nil {
+		log.Fatal("failed to register core resources", err)
+	}
+	log.Info("core resources registered successfully")
+
 	log.Info("RBAC module initialized successfully")
 
 	// Initialize metrics collector
@@ -142,6 +150,9 @@ func main() {
 	router.Use(gin.Recovery())
 	router.Use(ginLogger(log))
 	router.Use(corsMiddleware())
+
+	// Create RBAC middleware adapter for permission checks
+	rbacChecker := middleware.NewPolicyEngineAdapter(rbacModule.GetPolicyEngine())
 
 	// Metrics endpoints (Prometheus and JSON)
 	// No authentication required - typically accessed by monitoring systems
@@ -176,20 +187,37 @@ func main() {
 		tenants := v1.Group("/tenants")
 		tenants.Use(middleware.OptionalTenantIdentifier())
 		{
-			// Public tenant operations
+			// Public tenant creation (for initial registration)
 			tenants.POST("", tenantModule.Handler.CreateTenant)
-			tenants.GET("", tenantModule.Handler.ListTenants)
 
-			// Protected tenant operations (requires auth)
+			// Protected tenant operations (requires auth + RBAC)
 			tenantsProtected := tenants.Group("")
 			tenantsProtected.Use(middleware.RequireAuth(authModule.TokenValidator))
 			{
-				tenantsProtected.GET("/:id", tenantModule.Handler.GetTenant)
-				tenantsProtected.PUT("/:id", tenantModule.Handler.UpdateTenant)
-				tenantsProtected.DELETE("/:id", tenantModule.Handler.DeleteTenant)
-				tenantsProtected.POST("/:id/suspend", tenantModule.Handler.SuspendTenant)
-				tenantsProtected.POST("/:id/activate", tenantModule.Handler.ActivateTenant)
-				tenantsProtected.GET("/:id/stats", tenantModule.Handler.GetTenantStats)
+				// System-level operations (platform admin only)
+				tenantsProtected.GET("",
+					middleware.RequirePermission(rbacChecker, "tenant", "list"),
+					tenantModule.Handler.ListTenants)
+				tenantsProtected.DELETE("/:id",
+					middleware.RequirePermission(rbacChecker, "tenant", "delete"),
+					tenantModule.Handler.DeleteTenant)
+				tenantsProtected.POST("/:id/suspend",
+					middleware.RequirePermission(rbacChecker, "tenant", "suspend"),
+					tenantModule.Handler.SuspendTenant)
+				tenantsProtected.POST("/:id/activate",
+					middleware.RequirePermission(rbacChecker, "tenant", "suspend"),
+					tenantModule.Handler.ActivateTenant)
+
+				// Tenant-level operations (tenant members)
+				tenantsProtected.GET("/:id",
+					middleware.RequirePermission(rbacChecker, "tenant", "read"),
+					tenantModule.Handler.GetTenant)
+				tenantsProtected.PUT("/:id",
+					middleware.RequirePermission(rbacChecker, "tenant", "update"),
+					tenantModule.Handler.UpdateTenant)
+				tenantsProtected.GET("/:id/stats",
+					middleware.RequirePermission(rbacChecker, "tenant", "read"),
+					tenantModule.Handler.GetTenantStats)
 			}
 		}
 
@@ -198,29 +226,49 @@ func main() {
 		rbacGroup.Use(middleware.RequireAuth(authModule.TokenValidator))
 		rbacGroup.Use(middleware.OptionalTenantIdentifier())
 		{
-			// Role management
-			rbacGroup.POST("/roles", rbacModule.Handler.CreateRole)
-			rbacGroup.GET("/roles", rbacModule.Handler.ListRoles)
-			rbacGroup.GET("/roles/:id", rbacModule.Handler.GetRole)
-			rbacGroup.PUT("/roles/:id", rbacModule.Handler.UpdateRole)
-			rbacGroup.DELETE("/roles/:id", rbacModule.Handler.DeleteRole)
+			// Role management (tenant admin required)
+			rbacGroup.POST("/roles",
+				middleware.RequirePermission(rbacChecker, "role", "create"),
+				rbacModule.Handler.CreateRole)
+			rbacGroup.GET("/roles",
+				middleware.RequirePermission(rbacChecker, "role", "list"),
+				rbacModule.Handler.ListRoles)
+			rbacGroup.GET("/roles/:id",
+				middleware.RequirePermission(rbacChecker, "role", "read"),
+				rbacModule.Handler.GetRole)
+			rbacGroup.PUT("/roles/:id",
+				middleware.RequirePermission(rbacChecker, "role", "update"),
+				rbacModule.Handler.UpdateRole)
+			rbacGroup.DELETE("/roles/:id",
+				middleware.RequirePermission(rbacChecker, "role", "delete"),
+				rbacModule.Handler.DeleteRole)
 
-			// Permission management
+			// Permission management (tenant admin required)
 			rbacGroup.GET("/permissions", rbacModule.Handler.GetAllPermissions)
-			rbacGroup.GET("/roles/:id/permissions", rbacModule.Handler.GetRolePermissions)
-			rbacGroup.POST("/roles/:id/permissions", rbacModule.Handler.AssignPermissionsToRole)
+			rbacGroup.GET("/roles/:id/permissions",
+				middleware.RequirePermission(rbacChecker, "role", "read"),
+				rbacModule.Handler.GetRolePermissions)
+			rbacGroup.POST("/roles/:id/permissions",
+				middleware.RequirePermission(rbacChecker, "role", "update"),
+				rbacModule.Handler.AssignPermissionsToRole)
 
-			// User role management
-			rbacGroup.POST("/users/:id/roles", rbacModule.Handler.AssignRoleToUser)
-			rbacGroup.DELETE("/users/:id/roles/:role_id", rbacModule.Handler.RemoveRoleFromUser)
+			// User role management (tenant admin required)
+			rbacGroup.POST("/users/:id/roles",
+				middleware.RequirePermission(rbacChecker, "role", "assign"),
+				rbacModule.Handler.AssignRoleToUser)
+			rbacGroup.DELETE("/users/:id/roles/:role_id",
+				middleware.RequirePermission(rbacChecker, "role", "assign"),
+				rbacModule.Handler.RemoveRoleFromUser)
 			rbacGroup.GET("/users/:id/roles", rbacModule.Handler.GetUserRoles)
 			rbacGroup.GET("/users/:id/permissions", rbacModule.Handler.GetUserPermissions)
 
-			// Resource registration
-			rbacGroup.POST("/resources", rbacModule.Handler.RegisterResource)
+			// Resource registration (tenant admin required)
+			rbacGroup.POST("/resources",
+				middleware.RequirePermission(rbacChecker, "resource", "create"),
+				rbacModule.Handler.RegisterResource)
 			rbacGroup.GET("/resources", rbacModule.Handler.ListResources)
 
-			// Permission checking
+			// Permission checking (any authenticated user)
 			rbacGroup.POST("/permissions/check", rbacModule.Handler.CheckPermission)
 		}
 	}

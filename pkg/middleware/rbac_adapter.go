@@ -2,43 +2,24 @@ package middleware
 
 import (
 	"context"
+
+	"github.com/victoralfred/kube_manager/internal/rbac"
 )
-
-// RBACPermissionChecker is an interface that matches the RBAC PolicyEngine
-type RBACPermissionChecker interface {
-	CheckPermission(ctx context.Context, req RBACPermissionCheckRequest) (RBACPermissionCheckResult, error)
-}
-
-// RBACPermissionCheckRequest matches the RBAC package's PermissionCheckRequest
-type RBACPermissionCheckRequest struct {
-	UserID   string
-	TenantID string
-	Resource string
-	Action   string
-	ObjectID string
-	Context  map[string]interface{}
-}
-
-// RBACPermissionCheckResult matches the RBAC package's PermissionCheckResult
-type RBACPermissionCheckResult struct {
-	Allowed bool
-	Reason  string
-}
 
 // PolicyEngineAdapter adapts the RBAC PolicyEngine to work with the middleware
 type PolicyEngineAdapter struct {
-	engine RBACPermissionChecker
+	engine rbac.PolicyEngine
 }
 
 // NewPolicyEngineAdapter creates a new adapter
-func NewPolicyEngineAdapter(engine RBACPermissionChecker) *PolicyEngineAdapter {
+func NewPolicyEngineAdapter(engine rbac.PolicyEngine) *PolicyEngineAdapter {
 	return &PolicyEngineAdapter{engine: engine}
 }
 
 // CheckPermission implements the PermissionChecker interface
 func (a *PolicyEngineAdapter) CheckPermission(ctx context.Context, req PermissionCheckRequest) (PermissionCheckResult, error) {
 	// Convert middleware request to RBAC request
-	rbacReq := RBACPermissionCheckRequest{
+	rbacReq := rbac.PermissionCheckRequest{
 		UserID:   req.UserID,
 		TenantID: req.TenantID,
 		Resource: req.Resource,
