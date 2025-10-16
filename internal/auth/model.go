@@ -95,3 +95,13 @@ func (r *RefreshToken) IsValid() bool {
 func (c *Claims) GetRoles() []string {
 	return c.Roles
 }
+
+// GetUserID returns the user ID from claims (implements UserClaims interface)
+func (c *Claims) GetUserID() string {
+	return c.UserID
+}
+
+// GetTenantID returns the tenant ID from claims (implements UserClaims interface)
+func (c *Claims) GetTenantID() string {
+	return c.TenantID
+}
