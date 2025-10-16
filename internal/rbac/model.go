@@ -94,6 +94,13 @@ type AssignRoleRequest struct {
 	RoleID string `json:"role_id" binding:"required,uuid"`
 }
 
+// RegisterResourceRequest represents a request to register a custom resource
+type RegisterResourceRequest struct {
+	Name        string   `json:"name" binding:"required,min=3,max=50"`
+	Description string   `json:"description" binding:"max=500"`
+	Actions     []string `json:"actions" binding:"required,min=1"`
+}
+
 // CheckPermissionRequest represents a permission check request
 type CheckPermissionRequest struct {
 	UserID   string `json:"user_id" binding:"required,uuid"`

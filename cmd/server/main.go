@@ -107,21 +107,19 @@ func main() {
 		cacheInstance = cache.NewInMemoryCache()
 	}
 
-	// Initialize RBAC policy engine
-	log.Info("initializing RBAC policy engine")
-	rbacRepo := rbac.NewRepository(db)
-	policyEngine := rbac.NewPolicyEngine(rbac.PolicyEngineConfig{
-		Repository: rbacRepo,
-		Cache:      cacheInstance,
-		CacheTTL:   15 * time.Minute,
-	})
-	log.Info("RBAC policy engine initialized successfully")
+	// Initialize RBAC module
+	log.Info("initializing RBAC module")
+	rbacModule := rbac.NewModule(db, rbac.ModuleConfig{
+		Cache:    cacheInstance,
+		CacheTTL: 15 * time.Minute,
+	}, log)
+	log.Info("RBAC module initialized successfully")
 
 	// Initialize metrics collector
 	log.Info("initializing prometheus metrics collector")
 	metricsCollector := metrics.NewCollector(metrics.CollectorConfig{
 		Cache:                cacheInstance,
-		PolicyEngine:         policyEngine,
+		PolicyEngine:         rbacModule.GetPolicyEngine(),
 		UpdateInterval:       15 * time.Second,
 		EnableGoMetrics:      cfg.App.Environment == "production",
 		EnableProcessMetrics: cfg.App.Environment == "production",
@@ -193,6 +191,37 @@ func main() {
 				tenantsProtected.POST("/:id/activate", tenantModule.Handler.ActivateTenant)
 				tenantsProtected.GET("/:id/stats", tenantModule.Handler.GetTenantStats)
 			}
+		}
+
+		// RBAC routes (requires authentication and tenant context)
+		rbacGroup := v1.Group("")
+		rbacGroup.Use(middleware.RequireAuth(authModule.TokenValidator))
+		rbacGroup.Use(middleware.OptionalTenantIdentifier())
+		{
+			// Role management
+			rbacGroup.POST("/roles", rbacModule.Handler.CreateRole)
+			rbacGroup.GET("/roles", rbacModule.Handler.ListRoles)
+			rbacGroup.GET("/roles/:id", rbacModule.Handler.GetRole)
+			rbacGroup.PUT("/roles/:id", rbacModule.Handler.UpdateRole)
+			rbacGroup.DELETE("/roles/:id", rbacModule.Handler.DeleteRole)
+
+			// Permission management
+			rbacGroup.GET("/permissions", rbacModule.Handler.GetAllPermissions)
+			rbacGroup.GET("/roles/:id/permissions", rbacModule.Handler.GetRolePermissions)
+			rbacGroup.POST("/roles/:id/permissions", rbacModule.Handler.AssignPermissionsToRole)
+
+			// User role management
+			rbacGroup.POST("/users/:id/roles", rbacModule.Handler.AssignRoleToUser)
+			rbacGroup.DELETE("/users/:id/roles/:role_id", rbacModule.Handler.RemoveRoleFromUser)
+			rbacGroup.GET("/users/:id/roles", rbacModule.Handler.GetUserRoles)
+			rbacGroup.GET("/users/:id/permissions", rbacModule.Handler.GetUserPermissions)
+
+			// Resource registration
+			rbacGroup.POST("/resources", rbacModule.Handler.RegisterResource)
+			rbacGroup.GET("/resources", rbacModule.Handler.ListResources)
+
+			// Permission checking
+			rbacGroup.POST("/permissions/check", rbacModule.Handler.CheckPermission)
 		}
 	}
 
