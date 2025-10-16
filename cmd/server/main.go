@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -9,11 +10,15 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 	"github.com/victoralfred/kube_manager/internal/auth"
+	"github.com/victoralfred/kube_manager/internal/rbac"
 	"github.com/victoralfred/kube_manager/internal/tenant"
+	"github.com/victoralfred/kube_manager/pkg/cache"
 	"github.com/victoralfred/kube_manager/pkg/config"
 	"github.com/victoralfred/kube_manager/pkg/database"
 	"github.com/victoralfred/kube_manager/pkg/logger"
+	"github.com/victoralfred/kube_manager/pkg/metrics"
 	"github.com/victoralfred/kube_manager/pkg/middleware"
 )
 
@@ -72,6 +77,59 @@ func main() {
 		RefreshTokenTTL: cfg.JWT.RefreshTokenTTL,
 	}, log)
 
+	// Initialize cache (Redis with in-memory fallback)
+	log.Info("initializing cache system")
+	var cacheInstance cache.Cache
+	if cfg.Redis.Host != "" {
+		// Try Redis connection
+		redisClient := redis.NewClient(&redis.Options{
+			Addr:     fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
+			Password: cfg.Redis.Password,
+			DB:       cfg.Redis.DB,
+		})
+
+		redisCache, err := cache.NewRedisCache(cache.RedisConfig{
+			Client:          redisClient,
+			FallbackEnabled: true,
+			MaxFailures:     5,
+			ResetTimeout:    30 * time.Second,
+		})
+
+		if err != nil {
+			log.Warnf("redis connection failed, falling back to in-memory cache: %v", err)
+			cacheInstance = cache.NewInMemoryCache()
+		} else {
+			log.Info("redis cache initialized successfully")
+			cacheInstance = redisCache
+		}
+	} else {
+		log.Info("redis not configured, using in-memory cache")
+		cacheInstance = cache.NewInMemoryCache()
+	}
+
+	// Initialize RBAC policy engine
+	log.Info("initializing RBAC policy engine")
+	rbacRepo := rbac.NewRepository(db)
+	policyEngine := rbac.NewPolicyEngine(rbac.PolicyEngineConfig{
+		Repository: rbacRepo,
+		Cache:      cacheInstance,
+		CacheTTL:   15 * time.Minute,
+	})
+	log.Info("RBAC policy engine initialized successfully")
+
+	// Initialize metrics collector
+	log.Info("initializing prometheus metrics collector")
+	metricsCollector := metrics.NewCollector(metrics.CollectorConfig{
+		Cache:                cacheInstance,
+		PolicyEngine:         policyEngine,
+		UpdateInterval:       15 * time.Second,
+		EnableGoMetrics:      cfg.App.Environment == "production",
+		EnableProcessMetrics: cfg.App.Environment == "production",
+	})
+	metricsCollector.Start()
+	defer metricsCollector.Stop()
+	log.Info("metrics collector started successfully")
+
 	log.Info("all modules initialized successfully")
 
 	// Set Gin mode
@@ -87,14 +145,14 @@ func main() {
 	router.Use(ginLogger(log))
 	router.Use(corsMiddleware())
 
-	// Health check endpoint (no auth required)
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"status":  "healthy",
-			"version": cfg.App.Version,
-			"name":    cfg.App.Name,
-		})
-	})
+	// Metrics endpoints (Prometheus and JSON)
+	// No authentication required - typically accessed by monitoring systems
+	metricsHandler := metrics.NewHandler(metricsCollector)
+	metricsHandler.RegisterRoutes(router)
+	log.Info("metrics endpoints registered at /metrics and /health")
+
+	// Override default health check with metrics-integrated health check
+	// (metricsHandler.RegisterRoutes already registered /health)
 
 	// API v1 routes
 	v1 := router.Group("/api/v1")
@@ -173,6 +231,10 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error("server forced to shutdown", err)
 	}
+
+	// Stop metrics collector (also handled by defer, but explicit for clarity)
+	log.Info("stopping metrics collector")
+	metricsCollector.Stop()
 
 	// Close secrets manager
 	if err := cfg.Close(); err != nil {
