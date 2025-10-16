@@ -222,8 +222,10 @@ func (c *Collector) collectCacheMetrics() {
 	// Update gauges (point-in-time values, not cumulative)
 	c.cacheMetrics.HitRatio.Set(stats.HitRate / 100.0) // Convert percentage to ratio 0-1
 
-	// Update histogram with current average (approximation)
-	c.cacheMetrics.LatencySeconds.Observe(stats.AvgLatencyMs / 1000.0) // Convert ms to seconds
+	// Update histogram with current average (only if there have been operations)
+	if stats.Hits+stats.Misses > 0 {
+		c.cacheMetrics.LatencySeconds.Observe(stats.AvgLatencyMs / 1000.0) // Convert ms to seconds
+	}
 
 	// Circuit breaker state (numeric)
 	var state float64
@@ -294,8 +296,10 @@ func (c *Collector) collectRBACMetrics() {
 	c.lastRBACStats.OwnershipChecks = stats.OwnershipChecks
 	c.lastRBACStats.ConditionEvals = stats.ConditionEvals
 
-	// Latency histogram (point-in-time observation)
-	c.rbacMetrics.CheckLatencySeconds.Observe(stats.AvgCheckTimeMs / 1000.0) // Convert ms to seconds
+	// Latency histogram (only observe if there have been permission checks)
+	if stats.TotalChecks > 0 {
+		c.rbacMetrics.CheckLatencySeconds.Observe(stats.AvgCheckTimeMs / 1000.0) // Convert ms to seconds
+	}
 }
 
 // Handler returns the HTTP handler for /metrics endpoint
