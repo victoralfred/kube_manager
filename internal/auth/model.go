@@ -46,14 +46,14 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required,min=8"`
 }
 
-// RegisterRequest represents registration data
+// RegisterRequest represents registration data for a new organization and user
 type RegisterRequest struct {
-	Email       string `json:"email" binding:"required,email"`
-	Password    string `json:"password" binding:"required,min=8"`
-	Name        string `json:"name" binding:"required"`
-	TenantID    string `json:"tenant_id"`
-	TenantSlug  string `json:"tenant_slug"`
-	TenantName  string `json:"tenant_name"`
+	Email            string `json:"email" binding:"required,email"`
+	Password         string `json:"password" binding:"required,min=8"`
+	FirstName        string `json:"first_name" binding:"required"`
+	LastName         string `json:"last_name" binding:"required"`
+	OrganizationName string `json:"organization_name" binding:"required"`
+	Domain           string `json:"domain" binding:"required,alphanum,min=3,max=50"`
 }
 
 // RefreshRequest represents a token refresh request
@@ -69,11 +69,13 @@ type LoginResponse struct {
 
 // UserInfo represents basic user information
 type UserInfo struct {
-	ID       string   `json:"id"`
-	TenantID string   `json:"tenant_id"`
-	Email    string   `json:"email"`
-	Name     string   `json:"name"`
-	Roles    []string `json:"roles"`
+	ID             string   `json:"id"`
+	TenantID       string   `json:"tenant_id"`
+	Email          string   `json:"email"`
+	FirstName      string   `json:"first_name"`
+	LastName       string   `json:"last_name"`
+	EmailVerified  bool     `json:"email_verified"`
+	Roles          []string `json:"roles"`
 }
 
 // IsExpired checks if the refresh token is expired
