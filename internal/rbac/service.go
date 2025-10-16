@@ -3,7 +3,9 @@ package rbac
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/victoralfred/kube_manager/pkg/logger"
 )
 
@@ -298,9 +300,11 @@ func (s *service) AssignRoleToUser(ctx context.Context, userID, roleID, tenantID
 
 	// Create user role assignment
 	userRole := &UserRole{
+		ID:        uuid.New().String(),
 		UserID:    userID,
 		RoleID:    roleID,
 		TenantID:  tenantID,
+		CreatedAt: time.Now(),
 		CreatedBy: actorID,
 	}
 

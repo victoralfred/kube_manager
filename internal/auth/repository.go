@@ -265,8 +265,9 @@ func (r *repository) GetUserByEmail(ctx context.Context, tenantID, email string)
 // GetUserByID retrieves a user by ID
 func (r *repository) GetUserByID(ctx context.Context, userID string) (*UserCredentials, error) {
 	query := `
-		SELECT u.id, u.tenant_id, u.email, u.password_hash, u.first_name, u.last_name, u.status,
-		       u.created_at, u.updated_at, u.last_login_at,
+		SELECT u.id, u.tenant_id, u.email, u.username, u.password_hash, u.first_name, u.last_name,
+		       u.phone, u.avatar_url, u.status, u.metadata,
+		       u.created_at, u.updated_at, u.last_login_at, u.deleted_at,
 		       EXISTS(SELECT 1 FROM email_verification_tokens WHERE user_id = u.id AND verified_at IS NOT NULL) as email_verified,
 		       COALESCE(array_agg(r.slug) FILTER (WHERE r.slug IS NOT NULL), '{}') as roles
 		FROM users u
@@ -277,19 +278,26 @@ func (r *repository) GetUserByID(ctx context.Context, userID string) (*UserCrede
 	`
 
 	var user UserCredentials
-	var lastLoginAt sql.NullTime
+	var lastLoginAt, deletedAt sql.NullTime
+	var username, phone, avatarURL sql.NullString
+	var metadata []byte
 
 	err := r.db.QueryRowContext(ctx, query, userID).Scan(
 		&user.ID,
 		&user.TenantID,
 		&user.Email,
+		&username,
 		&user.PasswordHash,
 		&user.FirstName,
 		&user.LastName,
+		&phone,
+		&avatarURL,
 		&user.Status,
+		&metadata,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 		&lastLoginAt,
+		&deletedAt,
 		&user.EmailVerified,
 		&user.Roles,
 	)
@@ -302,8 +310,29 @@ func (r *repository) GetUserByID(ctx context.Context, userID string) (*UserCrede
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
+	// Handle nullable fields
+	if username.Valid {
+		user.Username = username.String
+	}
+	if phone.Valid {
+		user.Phone = &phone.String
+	}
+	if avatarURL.Valid {
+		user.AvatarURL = &avatarURL.String
+	}
 	if lastLoginAt.Valid {
 		user.LastLoginAt = &lastLoginAt.Time
+	}
+	if deletedAt.Valid {
+		user.DeletedAt = &deletedAt.Time
+	}
+
+	// Handle metadata JSON
+	if len(metadata) > 0 {
+		var m map[string]interface{}
+		if err := json.Unmarshal(metadata, &m); err == nil {
+			user.Metadata = m
+		}
 	}
 
 	return &user, nil
@@ -311,21 +340,36 @@ func (r *repository) GetUserByID(ctx context.Context, userID string) (*UserCrede
 
 // CreateUser creates a new user
 func (r *repository) CreateUser(ctx context.Context, user *UserCredentials) error {
+	// Serialize metadata to JSON
+	var metadataJSON []byte
+	var err error
+	if user.Metadata != nil {
+		metadataJSON, err = json.Marshal(user.Metadata)
+		if err != nil {
+			return fmt.Errorf("failed to marshal metadata: %w", err)
+		}
+	}
+
 	query := `
-		INSERT INTO users (id, tenant_id, email, password_hash, first_name, last_name, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO users (id, tenant_id, email, username, password_hash, first_name, last_name,
+		                   phone, avatar_url, status, metadata, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 	`
 
-	_, err := r.db.ExecContext(
+	_, err = r.db.ExecContext(
 		ctx,
 		query,
 		user.ID,
 		user.TenantID,
 		user.Email,
+		user.Username,
 		user.PasswordHash,
 		user.FirstName,
 		user.LastName,
+		user.Phone,
+		user.AvatarURL,
 		user.Status,
+		metadataJSON,
 		user.CreatedAt,
 		user.UpdatedAt,
 	)

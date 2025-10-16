@@ -252,9 +252,13 @@ func (r *repository) ListRoles(ctx context.Context, filter ListRolesFilter) ([]*
 		SELECT id, tenant_id, name, slug, description, is_system, created_at, updated_at
 	` + baseQuery + `
 		ORDER BY created_at DESC
-		LIMIT $` + fmt.Sprintf("%d", argIndex) + ` OFFSET $` + fmt.Sprintf("%d", argIndex+1)
+	`
 
-	args = append(args, filter.Limit, filter.Offset)
+	// Only add LIMIT/OFFSET if Limit is specified
+	if filter.Limit > 0 {
+		listQuery += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argIndex, argIndex+1)
+		args = append(args, filter.Limit, filter.Offset)
+	}
 
 	rows, err := r.db.QueryContext(ctx, listQuery, args...)
 	if err != nil {

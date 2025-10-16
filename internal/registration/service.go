@@ -63,10 +63,19 @@ func (s *service) Register(ctx context.Context, req auth.RegisterRequest) (any, 
 		return nil, err
 	}
 
+	// Determine tenant name and slug (support both new and legacy fields)
+	tenantName := req.TenantSlug
+	tenantSlug := req.TenantSlug
+	if tenantName == "" && req.OrganizationName != "" {
+		// Legacy: use organization_name and domain
+		tenantName = req.OrganizationName
+		tenantSlug = req.Domain
+	}
+
 	// Step 1: Create tenant
 	tenantReq := tenant.CreateTenantRequest{
-		Name:         req.OrganizationName,
-		Slug:         req.Domain,
+		Name:         tenantName,
+		Slug:         tenantSlug,
 		ContactName:  req.FirstName + " " + req.LastName,
 		ContactEmail: req.Email,
 		MaxUsers:     100,                      // Default limit
@@ -94,10 +103,12 @@ func (s *service) Register(ctx context.Context, req auth.RegisterRequest) (any, 
 		ID:           userID,
 		TenantID:     newTenant.ID,
 		Email:        req.Email,
+		Username:     req.Username, // New: support username
 		PasswordHash: string(passwordHash),
 		FirstName:    req.FirstName,
 		LastName:     req.LastName,
-		Status:       "active",
+		Status:       auth.UserStatusActive, // Active since first user is admin
+		Metadata:     map[string]interface{}{},
 		Roles:        []string{},
 		CreatedAt:    now,
 		UpdatedAt:    now,
@@ -162,10 +173,15 @@ func (s *service) Register(ctx context.Context, req auth.RegisterRequest) (any, 
 				ID:            userID,
 				TenantID:      newTenant.ID,
 				Email:         req.Email,
+				Username:      req.Username,
 				FirstName:     req.FirstName,
 				LastName:      req.LastName,
-				EmailVerified: false,
+				Status:        auth.UserStatusActive,
+				Metadata:      map[string]interface{}{},
+				CreatedAt:     now,
+				UpdatedAt:     now,
 				Roles:         []string{"admin"},
+				EmailVerified: true, // Legacy field
 			},
 		}, nil
 	}
@@ -177,10 +193,15 @@ func (s *service) Register(ctx context.Context, req auth.RegisterRequest) (any, 
 			ID:            userID,
 			TenantID:      newTenant.ID,
 			Email:         req.Email,
+			Username:      req.Username,
 			FirstName:     req.FirstName,
 			LastName:      req.LastName,
-			EmailVerified: false,
+			Status:        auth.UserStatusActive,
+			Metadata:      map[string]interface{}{},
+			CreatedAt:     now,
+			UpdatedAt:     now,
 			Roles:         []string{"admin"},
+			EmailVerified: true, // Legacy field - admin user is automatically verified
 		},
 		Tokens: tokens,
 	}, nil
@@ -239,12 +260,22 @@ func (s *service) validateRegisterRequest(req auth.RegisterRequest) error {
 	if req.LastName == "" {
 		return fmt.Errorf("last name is required")
 	}
-	if req.OrganizationName == "" {
-		return fmt.Errorf("organization name is required")
+
+	// Support both new (tenant_slug) and legacy (organization_name + domain) fields
+	if req.TenantSlug == "" && (req.OrganizationName == "" || req.Domain == "") {
+		return fmt.Errorf("either tenant_slug or organization_name+domain is required")
 	}
-	if req.Domain == "" || len(req.Domain) < 3 {
+
+	// Validate tenant_slug if provided
+	if req.TenantSlug != "" && len(req.TenantSlug) < 3 {
+		return fmt.Errorf("tenant_slug must be at least 3 characters")
+	}
+
+	// Validate domain (legacy) if provided
+	if req.Domain != "" && len(req.Domain) < 3 {
 		return fmt.Errorf("domain must be at least 3 characters")
 	}
+
 	return nil
 }
 
