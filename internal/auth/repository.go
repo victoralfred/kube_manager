@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -27,19 +28,28 @@ type Repository interface {
 }
 
 // UserCredentials represents user authentication data
+// UserCredentials represents user data with credentials (internal use)
+// Aligned with OpenAPI specification
 type UserCredentials struct {
-	ID             string
-	TenantID       string
-	Email          string
-	PasswordHash   string
-	FirstName      string
-	LastName       string
-	Status         string
-	EmailVerified  bool
-	Roles          []string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	LastLoginAt    *time.Time
+	ID           string
+	TenantID     string
+	Email        string
+	Username     string
+	PasswordHash string
+	FirstName    string
+	LastName     string
+	Phone        *string
+	AvatarURL    *string
+	Status       UserStatus
+	Metadata     map[string]interface{}
+	Roles        []string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	LastLoginAt  *time.Time
+	DeletedAt    *time.Time
+
+	// Legacy field for backward compatibility
+	EmailVerified bool
 }
 
 type repository struct {
@@ -179,8 +189,9 @@ func (r *repository) DeleteExpiredTokens(ctx context.Context) error {
 // GetUserByEmail retrieves a user by email and tenant
 func (r *repository) GetUserByEmail(ctx context.Context, tenantID, email string) (*UserCredentials, error) {
 	query := `
-		SELECT u.id, u.tenant_id, u.email, u.password_hash, u.first_name, u.last_name, u.status,
-		       u.created_at, u.updated_at, u.last_login_at,
+		SELECT u.id, u.tenant_id, u.email, u.username, u.password_hash, u.first_name, u.last_name,
+		       u.phone, u.avatar_url, u.status, u.metadata,
+		       u.created_at, u.updated_at, u.last_login_at, u.deleted_at,
 		       EXISTS(SELECT 1 FROM email_verification_tokens WHERE user_id = u.id AND verified_at IS NOT NULL) as email_verified,
 		       COALESCE(array_agg(r.slug) FILTER (WHERE r.slug IS NOT NULL), '{}') as roles
 		FROM users u
@@ -191,19 +202,26 @@ func (r *repository) GetUserByEmail(ctx context.Context, tenantID, email string)
 	`
 
 	var user UserCredentials
-	var lastLoginAt sql.NullTime
+	var lastLoginAt, deletedAt sql.NullTime
+	var username, phone, avatarURL sql.NullString
+	var metadata []byte
 
 	err := r.db.QueryRowContext(ctx, query, tenantID, email).Scan(
 		&user.ID,
 		&user.TenantID,
 		&user.Email,
+		&username,
 		&user.PasswordHash,
 		&user.FirstName,
 		&user.LastName,
+		&phone,
+		&avatarURL,
 		&user.Status,
+		&metadata,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 		&lastLoginAt,
+		&deletedAt,
 		&user.EmailVerified,
 		&user.Roles,
 	)
@@ -216,8 +234,29 @@ func (r *repository) GetUserByEmail(ctx context.Context, tenantID, email string)
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
+	// Handle nullable fields
+	if username.Valid {
+		user.Username = username.String
+	}
+	if phone.Valid {
+		user.Phone = &phone.String
+	}
+	if avatarURL.Valid {
+		user.AvatarURL = &avatarURL.String
+	}
 	if lastLoginAt.Valid {
 		user.LastLoginAt = &lastLoginAt.Time
+	}
+	if deletedAt.Valid {
+		user.DeletedAt = &deletedAt.Time
+	}
+
+	// Handle metadata JSON
+	if len(metadata) > 0 {
+		var m map[string]interface{}
+		if err := json.Unmarshal(metadata, &m); err == nil {
+			user.Metadata = m
+		}
 	}
 
 	return &user, nil

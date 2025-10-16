@@ -95,16 +95,27 @@ func (s *service) Login(ctx context.Context, req LoginRequest, ipAddress, userAg
 	s.log.WithField("user_id", user.ID).WithField("tenant_id", user.TenantID).Info("user logged in successfully")
 
 	return &LoginResponse{
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
+		TokenType:    tokens.TokenType,
+		ExpiresIn:    tokens.ExpiresIn,
 		User: UserInfo{
 			ID:            user.ID,
 			TenantID:      user.TenantID,
 			Email:         user.Email,
+			Username:      user.Username,
 			FirstName:     user.FirstName,
 			LastName:      user.LastName,
-			EmailVerified: user.EmailVerified,
+			Phone:         user.Phone,
+			AvatarURL:     user.AvatarURL,
+			Status:        user.Status,
+			Metadata:      user.Metadata,
+			LastLoginAt:   user.LastLoginAt,
+			CreatedAt:     user.CreatedAt,
+			UpdatedAt:     user.UpdatedAt,
 			Roles:         user.Roles,
+			EmailVerified: user.EmailVerified, // Legacy
 		},
-		Tokens: *tokens,
 	}, nil
 }
 
