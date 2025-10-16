@@ -27,6 +27,7 @@ LoginResponse:
     - refresh_token
     - token_type
     - expires_in
+    - expires_at
     - user
   properties:
     access_token:
@@ -45,6 +46,11 @@ LoginResponse:
       type: integer
       description: Token expiration time in seconds
       example: 900
+    expires_at:
+      type: string
+      format: date-time
+      description: Exact expiration timestamp
+      example: "2025-10-17T00:30:00Z"
     user:
       $ref: './user.yaml#/User'
 

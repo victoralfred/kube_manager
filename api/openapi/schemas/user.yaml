@@ -52,6 +52,16 @@ User:
       example: "https://example.com/avatars/john.jpg"
     status:
       $ref: '#/UserStatus'
+    roles:
+      type: array
+      items:
+        type: string
+      description: User roles
+      example: ["admin", "user"]
+    email_verified:
+      type: boolean
+      description: Whether the user's email is verified
+      example: true
     metadata:
       type: object
       description: Additional user metadata
@@ -89,6 +99,7 @@ UserStatus:
     - inactive
     - suspended
     - pending
+    - deleted
   description: Current status of the user
   example: "active"
 
