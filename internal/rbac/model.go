@@ -4,27 +4,53 @@ import (
 	"time"
 )
 
-// Role represents a role in the system
+// PermissionScope defines the scope of a permission
+type PermissionScope string
+
+const (
+	PermissionScopeSystem PermissionScope = "system" // Platform-wide (tenant:create, tenant:delete)
+	PermissionScopeTenant PermissionScope = "tenant" // Tenant-specific (invoice:create, project:read)
+)
+
+// RoleType defines the type classification of a role
+type RoleType string
+
+const (
+	RoleTypePlatform RoleType = "platform" // Platform-level role (cross-tenant, created by platform admin)
+	RoleTypeSystem   RoleType = "system"   // Auto-created tenant role (admin, user, viewer - cannot be deleted)
+	RoleTypeCustom   RoleType = "custom"   // Tenant-created custom role (can be deleted)
+)
+
+// Permission represents a permission template (no tenant duplication)
+type Permission struct {
+	ID                string
+	Resource          string
+	Action            string
+	Scope             PermissionScope
+	RequiresOwnership bool   // ABAC: whether this permission requires object ownership check
+	Description       string
+	CreatedAt         time.Time
+}
+
+// PermissionWithConditions represents a permission with ABAC conditions (for caching)
+type PermissionWithConditions struct {
+	Permission Permission
+	Conditions *Condition // ABAC conditions from role_permissions
+}
+
+// Role represents a role in the system with type classification
 type Role struct {
 	ID          string
-	TenantID    string
+	TenantID    *string  // NULL for platform roles
 	Name        string
 	Slug        string
 	Description string
+	RoleType    RoleType // platform, system, or custom
 	Permissions []Permission
 	IsSystem    bool // System roles cannot be deleted
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   *time.Time
-}
-
-// Permission represents a specific permission
-type Permission struct {
-	ID          string
-	Resource    string // e.g., "tenant", "user", "role", "resource"
-	Action      string // e.g., "create", "read", "update", "delete", "list"
-	Description string
-	CreatedAt   time.Time
 }
 
 // UserRole represents the assignment of a role to a user
@@ -149,3 +175,59 @@ const (
 	ActionList   = "list"
 	ActionManage = "manage" // Full access
 )
+
+// ResourceDefinition defines a resource that can be registered dynamically
+type ResourceDefinition struct {
+	ID          string
+	Name        string          // e.g., "invoice", "project", "document"
+	Description string          // Human-readable description
+	Scope       PermissionScope // System or Tenant scoped
+	TenantID    *string         // NULL for system resources, specific for tenant custom resources
+	Actions     []string        // Supported actions for this resource
+	CreatedBy   string          // "system" or "tenant_admin"
+	CreatedAt   time.Time
+}
+
+// Condition represents ABAC condition (stored as JSONB)
+type Condition struct {
+	Operator string `json:"operator"` // "AND", "OR"
+	Rules    []Rule `json:"rules"`
+}
+
+// Rule represents a single ABAC rule
+type Rule struct {
+	Field    string      `json:"field"`    // "owner_id", "status", "created_by"
+	Operator string      `json:"operator"` // "equals", "in", "contains", "not_equals"
+	Value    interface{} `json:"value"`    // "${user.id}", ["draft", "pending"], etc.
+}
+
+// StandardActions returns the standard CRUD+List actions
+func StandardActions() []string {
+	return []string{ActionCreate, ActionRead, ActionUpdate, ActionDelete, ActionList}
+}
+
+// ReadOnlyActions returns read-only actions
+func ReadOnlyActions() []string {
+	return []string{ActionRead, ActionList}
+}
+
+// AuditLog represents an audit log entry (stored in binary files)
+type AuditLog struct {
+	ID           string                 `msgpack:"id"`
+	TenantID     *string                `msgpack:"tenant_id"`
+	EventType    string                 `msgpack:"event_type"`
+	ActorID      string                 `msgpack:"actor_id"`
+	ActorEmail   string                 `msgpack:"actor_email"`
+	TargetType   string                 `msgpack:"target_type"`
+	TargetID     string                 `msgpack:"target_id"`
+	Action       string                 `msgpack:"action"`
+	BeforeState  map[string]interface{} `msgpack:"before_state"`
+	AfterState   map[string]interface{} `msgpack:"after_state"`
+	IPAddress    string                 `msgpack:"ip_address"`
+	UserAgent    string                 `msgpack:"user_agent"`
+	RequestID    string                 `msgpack:"request_id"`
+	Result       string                 `msgpack:"result"` // "success", "failure", "denied"
+	ErrorMessage string                 `msgpack:"error_message"`
+	Metadata     map[string]interface{} `msgpack:"metadata"`
+	CreatedAt    time.Time              `msgpack:"created_at"`
+}

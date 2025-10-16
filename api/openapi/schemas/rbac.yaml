@@ -1,12 +1,61 @@
+# Production-Ready RBAC Schema with Template-Based Permissions
+# Architecture: RBAC + ABAC Hybrid with Two-Tier Scoping
+
+Permission:
+  type: object
+  required:
+    - id
+    - resource
+    - action
+    - scope
+    - created_at
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Permission template ID (no tenant duplication)
+      example: "880e8400-e29b-41d4-a716-446655440000"
+    resource:
+      type: string
+      description: Resource name
+      example: "invoice"
+    action:
+      type: string
+      enum: [create, read, update, delete, list, manage]
+      description: Action type
+      example: "create"
+    scope:
+      type: string
+      enum: [system, tenant]
+      description: |
+        Permission scope:
+        - system: Platform-wide (only platform admin)
+        - tenant: Tenant-specific (available to tenant users)
+      example: "tenant"
+    requires_ownership:
+      type: boolean
+      description: Whether this permission requires object ownership check (ABAC)
+      default: false
+      example: false
+    description:
+      type: string
+      description: Human-readable permission description
+      example: "Create new invoices"
+    created_at:
+      type: string
+      format: date-time
+      description: Creation timestamp
+      example: "2025-10-15T10:30:00Z"
+
 Role:
   type: object
   required:
     - id
-    - tenant_id
     - name
     - slug
+    - role_type
+    - is_system
     - created_at
-    - updated_at
   properties:
     id:
       type: string
@@ -16,38 +65,39 @@ Role:
     tenant_id:
       type: string
       format: uuid
-      description: Tenant identifier
+      nullable: true
+      description: Tenant ID (null for platform roles)
       example: "550e8400-e29b-41d4-a716-446655440000"
     name:
       type: string
+      minLength: 3
+      maxLength: 100
       description: Role name
-      example: "Administrator"
+      example: "Invoice Manager"
     slug:
       type: string
-      pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
-      description: URL-friendly role identifier
-      example: "admin"
+      pattern: '^[a-z][a-z0-9_]{2,49}$'
+      description: URL-friendly role identifier (lowercase, alphanumeric + underscore)
+      example: "invoice_manager"
     description:
       type: string
       nullable: true
+      maxLength: 500
       description: Role description
-      example: "Full system access"
+      example: "Can manage all invoices within tenant"
+    role_type:
+      type: string
+      enum: [platform, system, custom]
+      description: |
+        Role type classification:
+        - platform: Platform-level role (cross-tenant, created by platform admin)
+        - system: Auto-created tenant role (admin, user, viewer - cannot be deleted)
+        - custom: Tenant-created custom role (can be deleted)
+      example: "custom"
     is_system:
       type: boolean
-      description: Whether this is a system-defined role
-      default: false
+      description: System roles cannot be deleted (true for platform and system types)
       example: false
-    parent_role_id:
-      type: string
-      format: uuid
-      nullable: true
-      description: Parent role for hierarchy
-      example: null
-    permissions:
-      type: array
-      items:
-        $ref: '#/Permission'
-      description: Permissions assigned to this role
     created_at:
       type: string
       format: date-time
@@ -58,40 +108,119 @@ Role:
       format: date-time
       description: Last update timestamp
       example: "2025-10-15T11:45:00Z"
+    deleted_at:
+      type: string
+      format: date-time
+      nullable: true
+      description: Soft delete timestamp
+      example: null
 
-Permission:
+RoleWithPermissions:
+  allOf:
+    - $ref: '#/Role'
+    - type: object
+      properties:
+        permissions:
+          type: array
+          items:
+            $ref: '#/Permission'
+          description: Permissions assigned to this role
+
+UserRole:
   type: object
   required:
     - id
-    - resource
-    - action
+    - user_id
+    - role_id
+    - tenant_id
     - created_at
   properties:
     id:
       type: string
       format: uuid
-      description: Unique permission identifier
-      example: "880e8400-e29b-41d4-a716-446655440000"
-    resource:
+      description: Assignment ID
+      example: "660e8400-e29b-41d4-a716-446655440000"
+    user_id:
       type: string
-      description: Resource type
-      example: "users"
-    action:
+      format: uuid
+      description: User ID
+      example: "110e8400-e29b-41d4-a716-446655440000"
+    role_id:
       type: string
-      description: Action allowed on resource
-      example: "create"
+      format: uuid
+      description: Role ID
+      example: "770e8400-e29b-41d4-a716-446655440000"
+    tenant_id:
+      type: string
+      format: uuid
+      description: Tenant ID
+      example: "550e8400-e29b-41d4-a716-446655440000"
+    created_at:
+      type: string
+      format: date-time
+      description: Assignment timestamp
+      example: "2025-10-15T10:30:00Z"
+    created_by:
+      type: string
+      format: uuid
+      description: Who assigned the role
+      example: "220e8400-e29b-41d4-a716-446655440000"
+
+ResourceDefinition:
+  type: object
+  required:
+    - id
+    - name
+    - scope
+    - actions
+    - created_by
+    - created_at
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Resource definition ID
+      example: "330e8400-e29b-41d4-a716-446655440000"
+    name:
+      type: string
+      pattern: '^[a-z][a-z0-9_]{2,49}$'
+      minLength: 3
+      maxLength: 50
+      description: |
+        Resource name (must follow rules):
+        - Start with lowercase letter
+        - Only lowercase letters, numbers, underscores
+        - 3-50 characters
+        - Cannot use reserved names (tenant, user, role, permission, audit_log)
+        - Cannot start with system_ or platform_
+      example: "contract"
     description:
       type: string
+      description: Resource description
+      example: "Contract management system"
+    scope:
+      type: string
+      enum: [system, tenant]
+      description: Resource scope
+      example: "tenant"
+    tenant_id:
+      type: string
+      format: uuid
       nullable: true
-      description: Permission description
-      example: "Create new users"
-    conditions:
-      type: object
-      description: Conditions for permission
-      additionalProperties: true
-      example:
-        max_users: 100
-        scope: "tenant"
+      description: Tenant ID for custom resources (null for system resources)
+      example: "550e8400-e29b-41d4-a716-446655440000"
+    actions:
+      type: array
+      items:
+        type: string
+      minItems: 1
+      description: Supported actions for this resource
+      example: ["create", "read", "update", "delete", "sign", "void"]
+    created_by:
+      type: string
+      enum: [system, tenant_admin]
+      description: Who created this resource
+      example: "tenant_admin"
     created_at:
       type: string
       format: date-time
@@ -106,28 +235,26 @@ CreateRoleRequest:
   properties:
     name:
       type: string
+      minLength: 3
+      maxLength: 100
       description: Role name
-      example: "Content Editor"
+      example: "Invoice Approver"
     slug:
       type: string
-      pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+      pattern: '^[a-z][a-z0-9_]{2,49}$'
       description: URL-friendly role identifier
-      example: "content-editor"
+      example: "invoice_approver"
     description:
       type: string
+      maxLength: 500
       description: Role description
-      example: "Can create and edit content"
-    parent_role_id:
-      type: string
-      format: uuid
-      description: Parent role for hierarchy
-      example: "770e8400-e29b-41d4-a716-446655440000"
+      example: "Can approve invoices under $10,000"
     permission_ids:
       type: array
       items:
         type: string
         format: uuid
-      description: Permission IDs to assign
+      description: List of permission template IDs to assign
       example: ["880e8400-e29b-41d4-a716-446655440000"]
 
 UpdateRoleRequest:
@@ -135,21 +262,66 @@ UpdateRoleRequest:
   properties:
     name:
       type: string
+      minLength: 3
+      maxLength: 100
       description: Role name
-      example: "Senior Content Editor"
+      example: "Senior Invoice Approver"
     description:
       type: string
+      maxLength: 500
       description: Role description
-      example: "Can create, edit, and publish content"
+      example: "Can approve invoices under $50,000"
     permission_ids:
       type: array
       items:
         type: string
         format: uuid
-      description: Permission IDs to assign
-      example: ["880e8400-e29b-41d4-a716-446655440000"]
+      description: Complete list of permission IDs (replaces existing)
+      example: ["880e8400-e29b-41d4-a716-446655440000", "990e8400-e29b-41d4-a716-446655440000"]
 
-CreatePermissionRequest:
+AssignRoleRequest:
+  type: object
+  required:
+    - user_id
+    - role_id
+  properties:
+    user_id:
+      type: string
+      format: uuid
+      description: User to assign role to
+      example: "110e8400-e29b-41d4-a716-446655440000"
+    role_id:
+      type: string
+      format: uuid
+      description: Role to assign
+      example: "770e8400-e29b-41d4-a716-446655440000"
+
+RegisterResourceRequest:
+  type: object
+  required:
+    - name
+    - actions
+  properties:
+    name:
+      type: string
+      pattern: '^[a-z][a-z0-9_]{2,49}$'
+      minLength: 3
+      maxLength: 50
+      description: Resource name (follows strict naming rules)
+      example: "contract"
+    description:
+      type: string
+      description: Resource description
+      example: "Contract management and signing"
+    actions:
+      type: array
+      items:
+        type: string
+      minItems: 1
+      description: List of actions this resource supports
+      example: ["create", "read", "update", "delete", "sign", "void"]
+
+CheckPermissionRequest:
   type: object
   required:
     - resource
@@ -157,111 +329,268 @@ CreatePermissionRequest:
   properties:
     resource:
       type: string
-      description: Resource type
-      example: "articles"
+      description: Resource name
+      example: "invoice"
     action:
       type: string
-      description: Action allowed on resource
-      example: "publish"
-    description:
+      description: Action to perform
+      example: "update"
+    object_id:
       type: string
-      description: Permission description
-      example: "Publish articles"
-    conditions:
-      type: object
-      description: Conditions for permission
-      additionalProperties: true
+      format: uuid
+      description: Optional - for object-level permission checks (ABAC)
+      example: "440e8400-e29b-41d4-a716-446655440000"
 
-Policy:
+CheckPermissionResponse:
   type: object
   required:
+    - allowed
+    - reason
+  properties:
+    allowed:
+      type: boolean
+      description: Whether the user has permission
+      example: true
+    reason:
+      type: string
+      enum: [granted, admin_override, owner, denied]
+      description: Reason for the decision
+      example: "admin_override"
+    message:
+      type: string
+      description: Human-readable explanation
+      example: "Permission granted via tenant admin role"
+
+AuditLogFilter:
+  type: object
+  properties:
+    actor_id:
+      type: string
+      format: uuid
+      description: Filter by actor (user) ID
+      example: "110e8400-e29b-41d4-a716-446655440000"
+    event_type:
+      type: string
+      description: Filter by event type
+      example: "role.created"
+    start_date:
+      type: string
+      format: date-time
+      description: Filter logs from this date
+      example: "2025-10-01T00:00:00Z"
+    end_date:
+      type: string
+      format: date-time
+      description: Filter logs until this date
+      example: "2025-10-16T23:59:59Z"
+    limit:
+      type: integer
+      default: 100
+      description: Maximum number of results
+      example: 100
+
+AuditLogEntry:
+  type: object
+  description: Read-only audit log entry (loaded from binary files on demand)
+  required:
     - id
-    - tenant_id
-    - name
-    - effect
-    - rules
+    - event_type
+    - action
+    - result
     - created_at
   properties:
     id:
       type: string
       format: uuid
-      description: Unique policy identifier
+      description: Unique audit log ID
       example: "990e8400-e29b-41d4-a716-446655440000"
     tenant_id:
       type: string
       format: uuid
-      description: Tenant identifier
+      nullable: true
+      description: Tenant ID (null for system events)
       example: "550e8400-e29b-41d4-a716-446655440000"
-    name:
+    event_type:
       type: string
-      description: Policy name
-      example: "Content Management Policy"
-    description:
+      description: Event type
+      example: "role.created"
+    actor_id:
+      type: string
+      format: uuid
+      description: User who performed the action
+      example: "110e8400-e29b-41d4-a716-446655440000"
+    actor_email:
+      type: string
+      format: email
+      description: Actor's email
+      example: "admin@example.com"
+    target_type:
+      type: string
+      description: Type of target resource
+      example: "role"
+    target_id:
+      type: string
+      format: uuid
+      description: ID of target resource
+      example: "770e8400-e29b-41d4-a716-446655440000"
+    action:
+      type: string
+      description: Action performed
+      example: "create"
+    before_state:
+      type: object
+      nullable: true
+      description: State before action
+    after_state:
+      type: object
+      nullable: true
+      description: State after action
+    ip_address:
+      type: string
+      description: Client IP address
+      example: "192.168.1.100"
+    user_agent:
+      type: string
+      description: Client user agent
+      example: "Mozilla/5.0..."
+    request_id:
+      type: string
+      format: uuid
+      description: Request ID for tracing
+      example: "880e8400-e29b-41d4-a716-446655440000"
+    result:
+      type: string
+      enum: [success, failure, denied]
+      description: Operation result
+      example: "success"
+    error_message:
       type: string
       nullable: true
-      description: Policy description
-      example: "Defines content management rules"
-    effect:
-      type: string
-      enum:
-        - allow
-        - deny
-      description: Policy effect
-      example: "allow"
-    rules:
-      type: array
-      items:
-        $ref: '#/PolicyRule'
-      description: Policy rules
-    priority:
-      type: integer
-      description: Policy priority (higher = more important)
-      default: 0
-      example: 100
+      description: Error message if failed
+      example: null
+    metadata:
+      type: object
+      description: Additional metadata
     created_at:
       type: string
       format: date-time
-      description: Creation timestamp
+      description: When the event occurred
       example: "2025-10-15T10:30:00Z"
-    updated_at:
-      type: string
-      format: date-time
-      description: Last update timestamp
-      example: "2025-10-15T11:45:00Z"
 
-PolicyRule:
+AuditLogList:
   type: object
   required:
-    - resource
-    - actions
+    - logs
+    - total
   properties:
-    resource:
-      type: string
-      description: Resource pattern
-      example: "articles:*"
-    actions:
+    logs:
       type: array
       items:
-        type: string
-      description: Allowed actions
-      example: ["read", "write", "delete"]
-    conditions:
+        $ref: '#/AuditLogEntry'
+      description: List of audit log entries
+    total:
+      type: integer
+      description: Total count of matching logs
+      example: 42
+
+PermissionList:
+  type: object
+  required:
+    - permissions
+    - total
+  properties:
+    permissions:
+      type: array
+      items:
+        $ref: '#/Permission'
+      description: List of permission templates
+    total:
+      type: integer
+      description: Total count
+      example: 42
+    grouped_by_resource:
       type: object
-      description: Conditions for the rule
-      additionalProperties: true
+      additionalProperties:
+        type: array
+        items:
+          $ref: '#/Permission'
+      description: Permissions grouped by resource for UI rendering
       example:
-        owner_only: true
-        status: ["draft", "published"]
+        invoice:
+          - {resource: "invoice", action: "create"}
+          - {resource: "invoice", action: "read"}
+        user:
+          - {resource: "user", action: "create"}
 
-AssignRoleRequest:
+RoleList:
   type: object
   required:
-    - role_ids
+    - roles
+    - total
   properties:
-    role_ids:
+    roles:
       type: array
       items:
-        type: string
-        format: uuid
-      description: Role IDs to assign
-      example: ["770e8400-e29b-41d4-a716-446655440000"]
+        $ref: '#/Role'
+      description: List of roles
+    total:
+      type: integer
+      description: Total count
+      example: 15
+
+ResourceList:
+  type: object
+  required:
+    - resources
+    - total
+  properties:
+    resources:
+      type: array
+      items:
+        $ref: '#/ResourceDefinition'
+      description: List of registered resources
+    total:
+      type: integer
+      description: Total count
+      example: 8
+    scopes:
+      type: object
+      properties:
+        system:
+          type: integer
+          description: Count of system-scoped resources
+          example: 2
+        tenant:
+          type: integer
+          description: Count of tenant-scoped resources
+          example: 6
+
+RBACError:
+  type: object
+  required:
+    - error
+    - code
+  properties:
+    error:
+      type: string
+      description: Error message
+      example: "Role not found"
+    code:
+      type: string
+      enum:
+        - role_not_found
+        - permission_denied
+        - system_role_protected
+        - reserved_name
+        - invalid_resource_name
+        - role_already_exists
+        - permission_not_found
+        - user_already_has_role
+      description: Error code
+      example: "role_not_found"
+    details:
+      type: object
+      additionalProperties: true
+      description: Additional error details
+      example:
+        role_id: "770e8400-e29b-41d4-a716-446655440000"

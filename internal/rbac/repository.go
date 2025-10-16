@@ -11,6 +11,13 @@ import (
 
 // Repository defines the RBAC repository interface
 type Repository interface {
+	// Permission operations (template-based)
+	GetPermission(ctx context.Context, resource, action string) (*Permission, error)
+	GetAllPermissions(ctx context.Context) ([]Permission, error)
+	GetPermissionByID(ctx context.Context, permissionID string) (*Permission, error)
+	GetPermissionsByResource(ctx context.Context, resource string) ([]Permission, error)
+	GetRolePermissions(ctx context.Context, roleID string) ([]Permission, error)
+
 	// Role operations
 	CreateRole(ctx context.Context, role *Role) error
 	GetRoleByID(ctx context.Context, roleID string) (*Role, error)
@@ -19,12 +26,6 @@ type Repository interface {
 	DeleteRole(ctx context.Context, roleID string) error
 	ListRoles(ctx context.Context, filter ListRolesFilter) ([]*Role, int, error)
 	RoleExists(ctx context.Context, tenantID, slug string) (bool, error)
-
-	// Permission operations
-	GetAllPermissions(ctx context.Context) ([]Permission, error)
-	GetPermissionByID(ctx context.Context, permissionID string) (*Permission, error)
-	GetPermissionsByResource(ctx context.Context, resource string) ([]Permission, error)
-	GetRolePermissions(ctx context.Context, roleID string) ([]Permission, error)
 
 	// Role-Permission operations
 	AssignPermissionsToRole(ctx context.Context, roleID string, permissionIDs []string) error
@@ -36,7 +37,18 @@ type Repository interface {
 	RemoveRoleFromUser(ctx context.Context, userID, roleID string) error
 	GetUserRoles(ctx context.Context, userID, tenantID string) ([]Role, error)
 	GetUserPermissions(ctx context.Context, userID, tenantID string) ([]Permission, error)
+	GetUserPermissionsWithConditions(ctx context.Context, userID, tenantID string) ([]PermissionWithConditions, error)
 	UserHasRole(ctx context.Context, userID, roleID string) (bool, error)
+
+	// Resource registry operations
+	RegisterResource(ctx context.Context, resource *ResourceDefinition) error
+	GetResource(ctx context.Context, name string, tenantID *string) (*ResourceDefinition, error)
+	ListResources(ctx context.Context, scope PermissionScope) ([]ResourceDefinition, error)
+
+	// Helper queries for policy engine
+	IsTenantAdmin(ctx context.Context, userID, tenantID string) (bool, error)
+	UserHasPlatformRole(ctx context.Context, userID, role string) (bool, error)
+	GetResourceOwner(ctx context.Context, resourceType, objectID string) (string, error)
 }
 
 type repository struct {
@@ -51,8 +63,8 @@ func NewRepository(db *database.DB) Repository {
 // CreateRole creates a new role
 func (r *repository) CreateRole(ctx context.Context, role *Role) error {
 	query := `
-		INSERT INTO roles (id, tenant_id, name, slug, description, is_system, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO roles (id, tenant_id, name, slug, description, role_type, is_system, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 
 	_, err := r.db.ExecContext(
@@ -63,6 +75,7 @@ func (r *repository) CreateRole(ctx context.Context, role *Role) error {
 		role.Name,
 		role.Slug,
 		role.Description,
+		role.RoleType,
 		role.IsSystem,
 		role.CreatedAt,
 		role.UpdatedAt,
@@ -78,20 +91,22 @@ func (r *repository) CreateRole(ctx context.Context, role *Role) error {
 // GetRoleByID retrieves a role by ID
 func (r *repository) GetRoleByID(ctx context.Context, roleID string) (*Role, error) {
 	query := `
-		SELECT id, tenant_id, name, slug, description, is_system, created_at, updated_at, deleted_at
+		SELECT id, tenant_id, name, slug, description, role_type, is_system, created_at, updated_at, deleted_at
 		FROM roles
 		WHERE id = $1 AND deleted_at IS NULL
 	`
 
 	var role Role
 	var deletedAt sql.NullTime
+	var tenantID sql.NullString
 
 	err := r.db.QueryRowContext(ctx, query, roleID).Scan(
 		&role.ID,
-		&role.TenantID,
+		&tenantID,
 		&role.Name,
 		&role.Slug,
 		&role.Description,
+		&role.RoleType,
 		&role.IsSystem,
 		&role.CreatedAt,
 		&role.UpdatedAt,
@@ -104,6 +119,10 @@ func (r *repository) GetRoleByID(ctx context.Context, roleID string) (*Role, err
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get role: %w", err)
+	}
+
+	if tenantID.Valid {
+		role.TenantID = &tenantID.String
 	}
 
 	if deletedAt.Valid {
