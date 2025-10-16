@@ -230,11 +230,11 @@ func (r *repository) ListRoles(ctx context.Context, filter ListRolesFilter) ([]*
 	argIndex := 2
 
 	if !filter.IncludeSystem {
-		baseQuery += fmt.Sprintf(" AND is_system = FALSE")
+		baseQuery += " AND is_system = FALSE"
 	}
 
 	if filter.Search != "" {
-		baseQuery += fmt.Sprintf(" AND (name ILIKE $%d OR description ILIKE $%d)", argIndex, argIndex)
+		baseQuery += fmt.Sprintf(" AND (name LIKE $%d OR description LIKE $%d)", argIndex, argIndex)
 		args = append(args, "%"+filter.Search+"%")
 		argIndex++
 	}

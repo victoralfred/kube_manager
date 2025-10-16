@@ -2,10 +2,14 @@ package auth
 
 import (
 	"context"
+	stderrors "errors"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
+	"github.com/victoralfred/kube_manager/internal/tenant"
 	"github.com/victoralfred/kube_manager/pkg/errors"
 )
 
@@ -34,7 +38,8 @@ func NewHandler(service Service, registrationService RegistrationService) *Handl
 func (h *Handler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.BadRequest("Invalid request body"))
+		appErr := extractValidationErrors(err)
+		c.JSON(appErr.Status, appErr)
 		return
 	}
 
@@ -54,7 +59,8 @@ func (h *Handler) Login(c *gin.Context) {
 func (h *Handler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.BadRequest("Invalid request body"))
+		appErr := extractValidationErrors(err)
+		c.JSON(appErr.Status, appErr)
 		return
 	}
 
@@ -71,7 +77,8 @@ func (h *Handler) Register(c *gin.Context) {
 func (h *Handler) VerifyEmail(c *gin.Context) {
 	var req VerifyEmailRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.BadRequest("Invalid request body"))
+		appErr := extractValidationErrors(err)
+		c.JSON(appErr.Status, appErr)
 		return
 	}
 
@@ -87,7 +94,8 @@ func (h *Handler) VerifyEmail(c *gin.Context) {
 func (h *Handler) ResendVerification(c *gin.Context) {
 	var req ResendVerificationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.BadRequest("Invalid request body"))
+		appErr := extractValidationErrors(err)
+		c.JSON(appErr.Status, appErr)
 		return
 	}
 
@@ -103,7 +111,8 @@ func (h *Handler) ResendVerification(c *gin.Context) {
 func (h *Handler) RefreshToken(c *gin.Context) {
 	var req RefreshRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.BadRequest("Invalid request body"))
+		appErr := extractValidationErrors(err)
+		c.JSON(appErr.Status, appErr)
 		return
 	}
 
@@ -124,7 +133,8 @@ func (h *Handler) Logout(c *gin.Context) {
 	// Get refresh token from request
 	var req RefreshRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.BadRequest("Invalid request body"))
+		appErr := extractValidationErrors(err)
+		c.JSON(appErr.Status, appErr)
 		return
 	}
 
@@ -174,6 +184,29 @@ func (h *Handler) RevokeAllSessions(c *gin.Context) {
 // Helper functions
 
 func handleAuthError(c *gin.Context, err error) {
+	// Check for tenant-specific errors using errors.Is
+	if stderrors.Is(err, tenant.ErrTenantAlreadyExists) {
+		c.JSON(http.StatusConflict, errors.Conflict("Organization with this slug already exists. Please choose a different slug."))
+		return
+	}
+	if stderrors.Is(err, tenant.ErrTenantSuspended) {
+		c.JSON(http.StatusForbidden, errors.Forbidden("Organization is suspended"))
+		return
+	}
+	if stderrors.Is(err, tenant.ErrTenantNotFound) {
+		c.JSON(http.StatusNotFound, errors.NotFound("Organization"))
+		return
+	}
+	if stderrors.Is(err, tenant.ErrInvalidTenantSlug) {
+		c.JSON(http.StatusBadRequest, errors.BadRequest("Invalid organization slug. Must be 3-50 alphanumeric characters."))
+		return
+	}
+	if stderrors.Is(err, tenant.ErrUserLimitExceeded) {
+		c.JSON(http.StatusForbidden, errors.Forbidden("User limit exceeded for this organization"))
+		return
+	}
+
+	// Check for auth-specific errors
 	switch err {
 	case ErrInvalidCredentials:
 		c.JSON(http.StatusUnauthorized, errors.Unauthorized("Invalid credentials"))
@@ -184,7 +217,7 @@ func handleAuthError(c *gin.Context, err error) {
 	case ErrUserSuspended:
 		c.JSON(http.StatusForbidden, errors.Forbidden("User account is suspended"))
 	case ErrEmailAlreadyExists:
-		c.JSON(http.StatusConflict, errors.Conflict("Email already exists"))
+		c.JSON(http.StatusConflict, errors.Conflict("Email address already registered. Please use a different email or try logging in."))
 	case ErrInvalidToken, ErrTokenMalformed:
 		c.JSON(http.StatusUnauthorized, errors.Unauthorized("Invalid token"))
 	case ErrTokenExpired:
@@ -196,10 +229,15 @@ func handleAuthError(c *gin.Context, err error) {
 	case ErrInvalidTokenType:
 		c.JSON(http.StatusUnauthorized, errors.Unauthorized("Invalid token type"))
 	case ErrTenantNotFound:
-		c.JSON(http.StatusBadRequest, errors.BadRequest("Tenant not specified"))
+		c.JSON(http.StatusBadRequest, errors.BadRequest("Organization not specified"))
 	case ErrTenantSuspended:
-		c.JSON(http.StatusForbidden, errors.Forbidden("Tenant is suspended"))
+		c.JSON(http.StatusForbidden, errors.Forbidden("Organization is suspended"))
 	default:
+		// Check if it's a wrapped error with more context
+		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "already exists") {
+			c.JSON(http.StatusConflict, errors.Conflict("Resource already exists"))
+			return
+		}
 		c.JSON(http.StatusInternalServerError, errors.Internal("Internal server error", err))
 	}
 }
@@ -226,4 +264,45 @@ func extractTokenFromHeader(c *gin.Context) string {
 	}
 
 	return parts[1]
+}
+
+// extractValidationErrors extracts specific field validation errors from gin binding errors
+func extractValidationErrors(err error) *errors.AppError {
+	// Check if it's a validator.ValidationErrors type
+	var validationErrs validator.ValidationErrors
+	if stderrors.As(err, &validationErrs) {
+		// Get the first validation error for simplicity
+		if len(validationErrs) > 0 {
+			fieldErr := validationErrs[0]
+			field := fieldErr.Field()
+			tag := fieldErr.Tag()
+
+			// Create user-friendly error messages based on validation tag
+			var message string
+			switch tag {
+			case "required":
+				message = fmt.Sprintf("Field '%s' is required", field)
+			case "email":
+				message = fmt.Sprintf("Field '%s' must be a valid email address", field)
+			case "min":
+				message = fmt.Sprintf("Field '%s' must be at least %s characters", field, fieldErr.Param())
+			case "max":
+				message = fmt.Sprintf("Field '%s' must be at most %s characters", field, fieldErr.Param())
+			case "alphanum":
+				message = fmt.Sprintf("Field '%s' must contain only alphanumeric characters", field)
+			default:
+				message = fmt.Sprintf("Field '%s' failed validation: %s", field, tag)
+			}
+
+			return errors.Validation(message)
+		}
+	}
+
+	// Check if it's a JSON unmarshaling error
+	if strings.Contains(err.Error(), "json") || strings.Contains(err.Error(), "unmarshal") {
+		return errors.BadRequest("Invalid JSON format in request body")
+	}
+
+	// Default error for other binding errors
+	return errors.BadRequest(fmt.Sprintf("Invalid request: %v", err))
 }
