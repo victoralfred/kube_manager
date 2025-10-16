@@ -1,6 +1,7 @@
 package rbac
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -231,3 +232,10 @@ type AuditLog struct {
 	Metadata     map[string]interface{} `msgpack:"metadata"`
 	CreatedAt    time.Time              `msgpack:"created_at"`
 }
+
+// Common errors
+var (
+	ErrInvalidResourceName = fmt.Errorf("invalid resource name")
+	ErrReservedName        = fmt.Errorf("name is reserved")
+	ErrResourceNotFound    = fmt.Errorf("resource not found")
+)

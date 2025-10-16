@@ -1,11 +1,12 @@
 package metrics
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/victoralfred/kube_manager/internal/rbac"
+	"github.com/victoralfred/kube_manager/pkg/cache"
 )
 
 // Handler provides HTTP handlers for metrics endpoints
@@ -121,83 +122,47 @@ func (h *Handler) HealthCheck(c *gin.Context) {
 
 // Helper functions to format stats for JSON output
 
-func formatCacheStatsJSON(stats interface{}) gin.H {
-	// Type assertion to get cache stats
-	s, ok := stats.(struct {
-		Hits         uint64
-		Misses       uint64
-		Sets         uint64
-		Deletes      uint64
-		Errors       uint64
-		HitRate      float64
-		AvgLatencyMs float64
-		CircuitOpen  bool
-	})
-
-	if !ok {
-		// Try to marshal and unmarshal to convert
-		data, _ := json.Marshal(stats)
-		json.Unmarshal(data, &s)
-	}
-
+func formatCacheStatsJSON(stats cache.CacheStats) gin.H {
 	return gin.H{
 		"operations": gin.H{
-			"hits":    s.Hits,
-			"misses":  s.Misses,
-			"sets":    s.Sets,
-			"deletes": s.Deletes,
+			"hits":    stats.Hits,
+			"misses":  stats.Misses,
+			"sets":    stats.Sets,
+			"deletes": stats.Deletes,
 		},
-		"errors":              s.Errors,
-		"hit_ratio":           s.HitRate / 100.0, // Convert to ratio
-		"avg_latency_seconds": s.AvgLatencyMs / 1000.0,
+		"errors":              stats.Errors,
+		"hit_ratio":           stats.HitRate / 100.0, // Convert to ratio
+		"avg_latency_seconds": stats.AvgLatencyMs / 1000.0,
 		"circuit_breaker": gin.H{
-			"open":   s.CircuitOpen,
-			"state":  getCircuitBreakerState(s.CircuitOpen),
-			"healthy": !s.CircuitOpen,
+			"open":    stats.CircuitOpen,
+			"state":   getCircuitBreakerState(stats.CircuitOpen),
+			"healthy": !stats.CircuitOpen,
 		},
 	}
 }
 
-func formatRBACStatsJSON(stats interface{}) gin.H {
-	// Type assertion for RBAC stats
-	s, ok := stats.(struct {
-		TotalChecks      uint64
-		CacheHits        uint64
-		CacheMisses      uint64
-		AdminOverrides   uint64
-		OwnershipChecks  uint64
-		ConditionEvals   uint64
-		Denials          uint64
-		Errors           uint64
-		AvgCheckTimeMs   float64
-	})
-
-	if !ok {
-		data, _ := json.Marshal(stats)
-		json.Unmarshal(data, &s)
-	}
-
-	granted := s.TotalChecks - s.Denials - s.Errors
+func formatRBACStatsJSON(stats rbac.PolicyEngineStats) gin.H {
+	granted := stats.TotalChecks - stats.Denials - stats.Errors
 
 	return gin.H{
-		"total_checks": s.TotalChecks,
+		"total_checks": stats.TotalChecks,
 		"results": gin.H{
 			"granted": granted,
-			"denied":  s.Denials,
-			"errors":  s.Errors,
+			"denied":  stats.Denials,
+			"errors":  stats.Errors,
 		},
 		"cache": gin.H{
-			"hits":      s.CacheHits,
-			"misses":    s.CacheMisses,
-			"hit_ratio": calculateHitRatio(s.CacheHits, s.CacheMisses),
+			"hits":      stats.CacheHits,
+			"misses":    stats.CacheMisses,
+			"hit_ratio": calculateHitRatio(stats.CacheHits, stats.CacheMisses),
 		},
 		"abac": gin.H{
-			"admin_overrides":     s.AdminOverrides,
-			"ownership_checks":    s.OwnershipChecks,
-			"condition_evaluations": s.ConditionEvals,
+			"admin_overrides":       stats.AdminOverrides,
+			"ownership_checks":      stats.OwnershipChecks,
+			"condition_evaluations": stats.ConditionEvals,
 		},
-		"avg_check_duration_seconds": s.AvgCheckTimeMs / 1000.0,
-		"errors_total":               s.Errors,
+		"avg_check_duration_seconds": stats.AvgCheckTimeMs / 1000.0,
+		"errors_total":               stats.Errors,
 	}
 }
 

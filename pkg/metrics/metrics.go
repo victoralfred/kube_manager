@@ -15,7 +15,7 @@
 package metrics
 
 import (
-	"context"
+	"net/http"
 	"sync"
 	"time"
 
@@ -34,7 +34,7 @@ type Collector struct {
 	rbacMetrics  *RBACMetrics
 
 	registry *prometheus.Registry
-	handler  *promhttp.Handler
+	handler  http.Handler
 
 	stopCh chan struct{}
 	wg     sync.WaitGroup
@@ -299,7 +299,7 @@ func (c *Collector) collectRBACMetrics() {
 }
 
 // Handler returns the HTTP handler for /metrics endpoint
-func (c *Collector) Handler() *promhttp.Handler {
+func (c *Collector) Handler() http.Handler {
 	return c.handler
 }
 
