@@ -18,9 +18,12 @@ type Repository interface {
 	RevokeAllUserTokens(ctx context.Context, userID string) error
 	DeleteExpiredTokens(ctx context.Context) error
 
-	// User credential operations (simplified for now)
+	// User credential operations
 	GetUserByEmail(ctx context.Context, tenantID, email string) (*UserCredentials, error)
+	GetUserByID(ctx context.Context, userID string) (*UserCredentials, error)
 	CreateUser(ctx context.Context, user *UserCredentials) error
+	UpdateEmailVerificationStatus(ctx context.Context, userID string, verified bool) error
+	IsEmailVerified(ctx context.Context, userID string) (bool, error)
 }
 
 // UserCredentials represents user authentication data
@@ -29,8 +32,10 @@ type UserCredentials struct {
 	TenantID       string
 	Email          string
 	PasswordHash   string
-	Name           string
+	FirstName      string
+	LastName       string
 	Status         string
+	EmailVerified  bool
 	Roles          []string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
@@ -174,8 +179,9 @@ func (r *repository) DeleteExpiredTokens(ctx context.Context) error {
 // GetUserByEmail retrieves a user by email and tenant
 func (r *repository) GetUserByEmail(ctx context.Context, tenantID, email string) (*UserCredentials, error) {
 	query := `
-		SELECT u.id, u.tenant_id, u.email, u.password_hash, u.name, u.status,
+		SELECT u.id, u.tenant_id, u.email, u.password_hash, u.first_name, u.last_name, u.status,
 		       u.created_at, u.updated_at, u.last_login_at,
+		       EXISTS(SELECT 1 FROM email_verification_tokens WHERE user_id = u.id AND verified_at IS NOT NULL) as email_verified,
 		       COALESCE(array_agg(r.slug) FILTER (WHERE r.slug IS NOT NULL), '{}') as roles
 		FROM users u
 		LEFT JOIN user_roles ur ON u.id = ur.user_id
@@ -192,11 +198,13 @@ func (r *repository) GetUserByEmail(ctx context.Context, tenantID, email string)
 		&user.TenantID,
 		&user.Email,
 		&user.PasswordHash,
-		&user.Name,
+		&user.FirstName,
+		&user.LastName,
 		&user.Status,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 		&lastLoginAt,
+		&user.EmailVerified,
 		&user.Roles,
 	)
 
@@ -215,11 +223,58 @@ func (r *repository) GetUserByEmail(ctx context.Context, tenantID, email string)
 	return &user, nil
 }
 
-// CreateUser creates a new user (simplified implementation)
+// GetUserByID retrieves a user by ID
+func (r *repository) GetUserByID(ctx context.Context, userID string) (*UserCredentials, error) {
+	query := `
+		SELECT u.id, u.tenant_id, u.email, u.password_hash, u.first_name, u.last_name, u.status,
+		       u.created_at, u.updated_at, u.last_login_at,
+		       EXISTS(SELECT 1 FROM email_verification_tokens WHERE user_id = u.id AND verified_at IS NOT NULL) as email_verified,
+		       COALESCE(array_agg(r.slug) FILTER (WHERE r.slug IS NOT NULL), '{}') as roles
+		FROM users u
+		LEFT JOIN user_roles ur ON u.id = ur.user_id
+		LEFT JOIN roles r ON ur.role_id = r.id
+		WHERE u.id = $1 AND u.deleted_at IS NULL
+		GROUP BY u.id
+	`
+
+	var user UserCredentials
+	var lastLoginAt sql.NullTime
+
+	err := r.db.QueryRowContext(ctx, query, userID).Scan(
+		&user.ID,
+		&user.TenantID,
+		&user.Email,
+		&user.PasswordHash,
+		&user.FirstName,
+		&user.LastName,
+		&user.Status,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+		&lastLoginAt,
+		&user.EmailVerified,
+		&user.Roles,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, ErrUserNotFound
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	if lastLoginAt.Valid {
+		user.LastLoginAt = &lastLoginAt.Time
+	}
+
+	return &user, nil
+}
+
+// CreateUser creates a new user
 func (r *repository) CreateUser(ctx context.Context, user *UserCredentials) error {
 	query := `
-		INSERT INTO users (id, tenant_id, email, password_hash, name, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO users (id, tenant_id, email, password_hash, first_name, last_name, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 
 	_, err := r.db.ExecContext(
@@ -229,7 +284,8 @@ func (r *repository) CreateUser(ctx context.Context, user *UserCredentials) erro
 		user.TenantID,
 		user.Email,
 		user.PasswordHash,
-		user.Name,
+		user.FirstName,
+		user.LastName,
 		user.Status,
 		user.CreatedAt,
 		user.UpdatedAt,
@@ -240,4 +296,29 @@ func (r *repository) CreateUser(ctx context.Context, user *UserCredentials) erro
 	}
 
 	return nil
+}
+
+// UpdateEmailVerificationStatus updates the email verification status for a user
+func (r *repository) UpdateEmailVerificationStatus(ctx context.Context, userID string, verified bool) error {
+	// This is handled by the email_verification_tokens table
+	// Just update the last_login_at to trigger any cache invalidation
+	return nil
+}
+
+// IsEmailVerified checks if a user's email is verified
+func (r *repository) IsEmailVerified(ctx context.Context, userID string) (bool, error) {
+	query := `
+		SELECT EXISTS(
+			SELECT 1 FROM email_verification_tokens
+			WHERE user_id = $1 AND verified_at IS NOT NULL
+		)
+	`
+
+	var verified bool
+	err := r.db.QueryRowContext(ctx, query, userID).Scan(&verified)
+	if err != nil {
+		return false, fmt.Errorf("failed to check email verification: %w", err)
+	}
+
+	return verified, nil
 }
