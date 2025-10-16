@@ -48,7 +48,15 @@ func main() {
 	log.Info("configuration loaded successfully from vault")
 
 	// Connect to database
-	log.Info("connecting to database")
+	log.WithField("db_host", cfg.Database.Host).
+		WithField("db_port", cfg.Database.Port).
+		WithField("db_name", cfg.Database.DBName).
+		WithField("db_user", cfg.Database.User).
+		WithField("ssl_mode", cfg.Database.SSLMode).
+		WithField("max_open_conns", cfg.Database.MaxOpenConns).
+		WithField("max_idle_conns", cfg.Database.MaxIdleConns).
+		Info("connecting to database")
+
 	db, err := database.NewPostgres(database.Config{
 		DSN:             cfg.Database.DSN(),
 		MaxOpenConns:    cfg.Database.MaxOpenConns,
@@ -64,7 +72,10 @@ func main() {
 	if err := db.Health(ctx); err != nil {
 		log.Fatal("database health check failed", err)
 	}
-	log.Info("database connected successfully")
+	log.WithField("db_host", cfg.Database.Host).
+		WithField("db_port", cfg.Database.Port).
+		WithField("db_name", cfg.Database.DBName).
+		Info("database connected successfully")
 
 	// Run database migrations
 	log.Info("checking database migrations")
@@ -79,7 +90,13 @@ func main() {
 	tenantModule := tenant.NewModule(db, log)
 
 	// Initialize auth module with RSA keys from Vault
-	log.Info("initializing auth module with vault RSA keys")
+	log.WithField("jwt_key_id", cfg.JWT.KeyID).
+		WithField("access_token_ttl", cfg.JWT.AccessTokenTTL).
+		WithField("refresh_token_ttl", cfg.JWT.RefreshTokenTTL).
+		WithField("private_key_loaded", cfg.JWT.PrivateKey != nil).
+		WithField("public_key_loaded", cfg.JWT.PublicKey != nil).
+		Info("initializing auth module with vault RSA keys")
+
 	authModule := auth.NewModule(db, auth.Config{
 		PrivateKey:      cfg.JWT.PrivateKey,
 		PublicKey:       cfg.JWT.PublicKey,
@@ -93,6 +110,12 @@ func main() {
 	var cacheInstance cache.Cache
 	if cfg.Redis.Host != "" {
 		// Try Redis connection
+		log.WithField("redis_host", cfg.Redis.Host).
+			WithField("redis_port", cfg.Redis.Port).
+			WithField("redis_db", cfg.Redis.DB).
+			WithField("auth_enabled", cfg.Redis.Password != "").
+			Info("attempting redis connection")
+
 		redisClient := redis.NewClient(&redis.Options{
 			Addr:     fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
 			Password: cfg.Redis.Password,
@@ -110,7 +133,9 @@ func main() {
 			log.Warnf("redis connection failed, falling back to in-memory cache: %v", err)
 			cacheInstance = cache.NewInMemoryCache()
 		} else {
-			log.Info("redis cache initialized successfully")
+			log.WithField("redis_host", cfg.Redis.Host).
+				WithField("redis_port", cfg.Redis.Port).
+				Info("redis cache initialized successfully")
 			cacheInstance = redisCache
 		}
 	} else {

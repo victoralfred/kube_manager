@@ -75,6 +75,14 @@ func LoadWithVault(ctx context.Context, log *logger.Logger) (*SecureConfig, erro
 	// Load Vault configuration
 	vaultCfg := LoadVaultConfig()
 
+	// Log Vault configuration (without sensitive data)
+	log.WithField("vault_address", vaultCfg.Address).
+		WithField("mount_path", vaultCfg.MountPath).
+		WithField("secret_path", vaultCfg.SecretPath).
+		WithField("use_kubernetes_auth", vaultCfg.UseKubernetes).
+		WithField("token_renewal_enabled", vaultCfg.RenewToken).
+		Info("vault configuration loaded")
+
 	// Create Vault client
 	vaultClient, err := vault.NewClient(vault.Config{
 		Address:        vaultCfg.Address,
@@ -96,33 +104,62 @@ func LoadWithVault(ctx context.Context, log *logger.Logger) (*SecureConfig, erro
 	secretsManager := secrets.NewVaultManager(vaultClient, log)
 
 	// Check Vault health
+	log.Info("checking vault health")
 	if err := secretsManager.Health(ctx); err != nil {
 		return nil, fmt.Errorf("vault health check failed: %w", err)
 	}
+	log.Info("vault health check passed")
 
 	// Load database credentials from Vault
+	log.Info("fetching database credentials from vault")
 	dbCreds, err := secretsManager.GetDatabaseCredentials(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get database credentials: %w", err)
 	}
+	log.WithField("db_host", dbCreds.Host).
+		WithField("db_port", dbCreds.Port).
+		WithField("db_name", dbCreds.Database).
+		WithField("db_user", dbCreds.Username).
+		WithField("ssl_mode", dbCreds.SSLMode).
+		Info("database credentials loaded from vault")
 
 	// Load Redis credentials from Vault
+	log.Info("fetching redis credentials from vault")
 	redisCreds, err := secretsManager.GetRedisCredentials(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get redis credentials: %w", err)
 	}
+	log.WithField("redis_host", redisCreds.Host).
+		WithField("redis_port", redisCreds.Port).
+		WithField("redis_db", redisCreds.DB).
+		WithField("auth_enabled", redisCreds.Password != "").
+		Info("redis credentials loaded from vault")
 
 	// Load JWT keys from Vault
+	log.Info("fetching jwt keys from vault")
 	jwtKeys, err := secretsManager.GetJWTKeys(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get jwt keys: %w", err)
 	}
+	log.WithField("key_id", jwtKeys.KeyID).
+		WithField("private_key_loaded", jwtKeys.PrivateKey != nil).
+		WithField("public_key_loaded", jwtKeys.PublicKey != nil).
+		Info("jwt keys loaded from vault")
 
 	// Load CSRF keys from Vault
+	log.Info("fetching csrf keys from vault")
 	csrfKeys, err := secretsManager.GetCSRFKey(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get csrf keys: %w", err)
 	}
+	log.WithField("key_id", csrfKeys.KeyID).
+		WithField("private_key_loaded", csrfKeys.PrivateKey != nil).
+		WithField("public_key_loaded", csrfKeys.PublicKey != nil).
+		Info("csrf keys loaded from vault")
+
+	// Get token TTL configuration
+	accessTTL := getEnvAsDuration("JWT_ACCESS_TOKEN_TTL", 15*time.Minute)
+	refreshTTL := getEnvAsDuration("JWT_REFRESH_TOKEN_TTL", 7*24*time.Hour)
 
 	// Build configuration
 	cfg := &SecureConfig{
@@ -154,8 +191,8 @@ func LoadWithVault(ctx context.Context, log *logger.Logger) (*SecureConfig, erro
 			PrivateKey:      jwtKeys.PrivateKey,
 			PublicKey:       jwtKeys.PublicKey,
 			KeyID:           jwtKeys.KeyID,
-			AccessTokenTTL:  getEnvAsDuration("JWT_ACCESS_TOKEN_TTL", 15*time.Minute),
-			RefreshTokenTTL: getEnvAsDuration("JWT_REFRESH_TOKEN_TTL", 7*24*time.Hour),
+			AccessTokenTTL:  accessTTL,
+			RefreshTokenTTL: refreshTTL,
 		},
 		CSRF: SecureCSRFConfig{
 			PrivateKey: csrfKeys.PrivateKey,
@@ -171,7 +208,20 @@ func LoadWithVault(ctx context.Context, log *logger.Logger) (*SecureConfig, erro
 		SecretsManager: secretsManager,
 	}
 
-	log.Info("configuration loaded successfully with vault integration")
+	// Log final configuration summary (without sensitive data)
+	log.WithField("environment", cfg.App.Environment).
+		WithField("app_version", cfg.App.Version).
+		WithField("server_address", cfg.Server.ServerAddr()).
+		WithField("db_connection", fmt.Sprintf("%s:%d/%s", cfg.Database.Host, cfg.Database.Port, cfg.Database.DBName)).
+		WithField("redis_connection", fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port)).
+		WithField("jwt_access_ttl", accessTTL).
+		WithField("jwt_refresh_ttl", refreshTTL).
+		WithField("jwt_key_id", jwtKeys.KeyID).
+		WithField("csrf_key_id", csrfKeys.KeyID).
+		WithField("db_max_open_conns", cfg.Database.MaxOpenConns).
+		WithField("db_max_idle_conns", cfg.Database.MaxIdleConns).
+		Info("configuration loaded successfully with vault integration")
+
 	return cfg, nil
 }
 
