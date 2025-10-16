@@ -12,7 +12,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/victoralfred/kube_manager/internal/auth"
+	"github.com/victoralfred/kube_manager/internal/invitation"
 	"github.com/victoralfred/kube_manager/internal/rbac"
+	"github.com/victoralfred/kube_manager/internal/registration"
 	"github.com/victoralfred/kube_manager/internal/tenant"
 	"github.com/victoralfred/kube_manager/pkg/cache"
 	"github.com/victoralfred/kube_manager/pkg/config"
@@ -123,6 +125,33 @@ func main() {
 
 	log.Info("RBAC module initialized successfully")
 
+	// Initialize registration module (orchestrates auth, tenant, rbac)
+	log.Info("initializing registration module")
+	registrationModule := registration.NewModule(
+		authModule.Repository,
+		authModule.VerificationRepo,
+		tenantModule.Service,
+		rbacModule.GetService(),
+		authModule.JWTService,
+		log,
+	)
+	log.Info("registration module initialized successfully")
+
+	// Initialize invitation module (orchestrates auth, tenant, rbac)
+	log.Info("initializing invitation module")
+	invitationModule := invitation.NewModule(
+		db,
+		authModule.Repository,
+		tenantModule.Service,
+		rbacModule.GetService(),
+		log,
+	)
+	log.Info("invitation module initialized successfully")
+
+	// Wire up auth handler with registration service
+	authModule.SetHandler(registrationModule.Service)
+	log.Info("auth handler wired with registration service")
+
 	// Initialize metrics collector
 	log.Info("initializing prometheus metrics collector")
 	metricsCollector := metrics.NewCollector(metrics.CollectorConfig{
@@ -172,6 +201,8 @@ func main() {
 			authPublic.POST("/register", authModule.Handler.Register)
 			authPublic.POST("/login", authModule.Handler.Login)
 			authPublic.POST("/refresh", authModule.Handler.RefreshToken)
+			authPublic.POST("/verify-email", authModule.Handler.VerifyEmail)
+			authPublic.POST("/resend-verification", authModule.Handler.ResendVerification)
 		}
 
 		// Protected auth routes (requires authentication)
@@ -181,6 +212,29 @@ func main() {
 			authProtected.POST("/logout", authModule.Handler.Logout)
 			authProtected.GET("/me", authModule.Handler.Me)
 			authProtected.POST("/revoke-all", authModule.Handler.RevokeAllSessions)
+		}
+
+		// Public invitation routes (no authentication required)
+		invitationsPublic := v1.Group("/invitations")
+		{
+			invitationsPublic.GET("/:token", invitationModule.Handler.GetInvitation)
+			invitationsPublic.POST("/accept", invitationModule.Handler.AcceptInvitation)
+		}
+
+		// Protected invitation routes (requires authentication + permission)
+		invitationsProtected := v1.Group("/invitations")
+		invitationsProtected.Use(middleware.RequireAuth(authModule.TokenValidator))
+		invitationsProtected.Use(middleware.OptionalTenantIdentifier())
+		{
+			invitationsProtected.POST("",
+				middleware.RequirePermission(rbacChecker, "user", "create"),
+				invitationModule.Handler.InviteUser)
+			invitationsProtected.GET("",
+				middleware.RequirePermission(rbacChecker, "user", "read"),
+				invitationModule.Handler.ListInvitations)
+			invitationsProtected.DELETE("/:id",
+				middleware.RequirePermission(rbacChecker, "user", "delete"),
+				invitationModule.Handler.RevokeInvitation)
 		}
 
 		// Tenant routes (requires tenant context)
