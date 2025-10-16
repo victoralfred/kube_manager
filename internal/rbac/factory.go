@@ -35,6 +35,7 @@ func NewModule(db *database.DB, cfg ModuleConfig, log *logger.Logger) *Module {
 	policyEngine := NewPolicyEngine(PolicyEngineConfig{
 		Repository: repo,
 		Cache:      cfg.Cache,
+		Registry:   registry,
 		CacheTTL:   cfg.CacheTTL,
 	})
 

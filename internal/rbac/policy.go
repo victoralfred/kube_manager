@@ -135,7 +135,8 @@ func (p *policyEngine) CheckPermission(ctx context.Context, req PermissionCheckR
 	}
 
 	// Step 1: Verify resource exists in registry (Tier 1: In-Memory)
-	if !p.registry.Exists(req.Resource) {
+	// Skip registry check if registry is nil (safety check)
+	if p.registry != nil && !p.registry.Exists(req.Resource) {
 		atomic.AddUint64(&p.metrics.denials, 1)
 		return PermissionCheckResult{
 			Allowed: false,
